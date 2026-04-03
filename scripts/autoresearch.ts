@@ -1,7 +1,9 @@
 import {
+  closeSync,
   cpSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -9,6 +11,7 @@ import {
   writeFileSync,
 } from 'fs'
 import { createHash } from 'crypto'
+import { spawn } from 'child_process'
 import { dirname, join, relative, resolve } from 'path'
 
 type CommandName =
@@ -43,10 +46,15 @@ type ProjectConfig = {
   sentinel?: {
     codex_model?: string
     codex_timeout_minutes?: number
+    interval_minutes?: number
     interval_hours?: number
     stagnation_threshold?: number
     allowed_edit_roots?: string[]
     event_trigger_on_run_complete?: boolean
+    supervise_main_loop?: boolean
+    main_loop_iterations_per_launch?: number
+    main_loop_idle_threshold_minutes?: number
+    main_loop_model?: string
   }
 }
 
@@ -161,6 +169,17 @@ type SentinelRunRecord = {
   promotedPaths: string[]
 }
 
+type MainRunLock = {
+  project: string
+  pid: number
+  startedAt: string
+  heartbeatAt: string
+  launchedBy: 'user' | 'sentinel'
+  iterations: number
+  dryRun: boolean
+  model?: string
+}
+
 type ParsedArgs = {
   positional: string[]
   flags: Map<string, string | boolean>
@@ -267,6 +286,10 @@ function projectRunsDir(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'runs')
 }
 
+function projectRunLockPath(projectName: string): string {
+  return join(projectRuntimeDir(projectName), 'run-lock.json')
+}
+
 function projectHealthPath(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'health.json')
 }
@@ -346,6 +369,30 @@ function loadPhaseState(projectName: string): PhaseState {
 
 function savePhaseState(projectName: string, phase: PhaseState): void {
   writeJsonFile(projectPhasePath(projectName), phase)
+}
+
+function loadMainRunLock(projectName: string): MainRunLock | null {
+  const lockPath = projectRunLockPath(projectName)
+  if (!existsSync(lockPath)) return null
+  return readJsonFile<MainRunLock>(lockPath)
+}
+
+function saveMainRunLock(projectName: string, lock: MainRunLock): void {
+  writeJsonFile(projectRunLockPath(projectName), lock)
+}
+
+function clearMainRunLock(projectName: string): void {
+  rmSync(projectRunLockPath(projectName), { force: true })
+}
+
+function processExists(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function listProjectNames(): string[] {
@@ -1354,6 +1401,14 @@ function copyPathsIntoRoot(
     if (!existsSync(sourcePath)) continue
 
     const targetPath = join(targetRoot, relativePath)
+    const sourceResolved = resolve(sourcePath)
+    const targetResolved = resolve(targetPath)
+    if (
+      targetResolved === sourceResolved ||
+      targetResolved.startsWith(`${sourceResolved}/`)
+    ) {
+      continue
+    }
     ensureDir(dirname(targetPath))
     cpSync(sourcePath, targetPath, { recursive: true })
   }
@@ -3020,6 +3075,13 @@ function sentinelIntervalMs(
       return parsed * 60_000
     }
   }
+  if (
+    typeof config.sentinel?.interval_minutes === 'number' &&
+    Number.isFinite(config.sentinel.interval_minutes) &&
+    config.sentinel.interval_minutes > 0
+  ) {
+    return config.sentinel.interval_minutes * 60_000
+  }
   return (config.sentinel?.interval_hours ?? 6) * 3_600_000
 }
 
@@ -3028,6 +3090,138 @@ function shouldEventTriggerSentinel(
   runRecord: RunRecord,
 ): boolean {
   return (config.sentinel?.event_trigger_on_run_complete ?? true) && !runRecord.dryRun
+}
+
+function mainLoopIdleThresholdMs(config: ProjectConfig): number {
+  return (
+    (config.sentinel?.main_loop_idle_threshold_minutes ?? 5) * 60_000
+  )
+}
+
+function mainLoopIterationsPerLaunch(config: ProjectConfig): number {
+  return config.sentinel?.main_loop_iterations_per_launch ?? 1
+}
+
+function loadActiveMainRunLock(
+  projectName: string,
+  config: ProjectConfig,
+): MainRunLock | null {
+  const lock = loadMainRunLock(projectName)
+  if (!lock) return null
+
+  const heartbeatMs = Date.parse(lock.heartbeatAt)
+  const stale =
+    !Number.isFinite(heartbeatMs) ||
+    Date.now() - heartbeatMs > mainLoopIdleThresholdMs(config)
+
+  if (stale || !processExists(lock.pid)) {
+    clearMainRunLock(projectName)
+    return null
+  }
+
+  return lock
+}
+
+function shellEscape(value: string): string {
+  return `'${value.replaceAll(`'`, `'\\''`)}'`
+}
+
+function shouldSentinelLaunchMainLoop(
+  config: ProjectConfig,
+  report: HealthReport,
+): { launch: boolean; reason: string } {
+  if (!(config.sentinel?.supervise_main_loop ?? true)) {
+    return { launch: false, reason: 'Main-loop supervision disabled in config.' }
+  }
+
+  if (
+    report.phase.current !== 'experiment_bootstrap' &&
+    report.phase.current !== 'executable_experiments' &&
+    report.phase.current !== 'experiment_design'
+  ) {
+    return {
+      launch: false,
+      reason: `Phase ${report.phase.current} does not need auto-resume yet.`,
+    }
+  }
+
+  const blockingCriticalIssue = report.issues.find(
+    issue =>
+      issue.severity === 'critical' &&
+      issue.id !== 'stagnation' &&
+      issue.id !== 'failing-loop',
+  )
+  if (blockingCriticalIssue) {
+    return {
+      launch: false,
+      reason: `Critical issue ${blockingCriticalIssue.id} blocks auto-resume.`,
+    }
+  }
+
+  if (report.summary.failedRuns > 0) {
+    const recentRuns = report.recentRuns.slice(0, 2)
+    const allFailed =
+      recentRuns.length > 0 && recentRuns.every(run => run.status === 'failed')
+    if (allFailed) {
+      return {
+        launch: false,
+        reason: 'Recent runs are repeatedly failing; sentinel will not auto-restart until a human reviews the lane.',
+      }
+    }
+  }
+
+  return { launch: true, reason: 'No active main loop detected and phase allows autonomous continuation.' }
+}
+
+function launchMainLoopOnce(
+  projectName: string,
+  config: ProjectConfig,
+): MainRunLock {
+  const iterations = mainLoopIterationsPerLaunch(config)
+  const model = config.sentinel?.main_loop_model ?? config.codex?.model
+  const launchDir = join(projectRuntimeDir(projectName), 'launcher')
+  ensureDir(launchDir)
+  const launchId = new Date()
+    .toISOString()
+    .replaceAll(':', '')
+    .replaceAll('.', '')
+    .replaceAll('-', '')
+  const stdoutPath = join(launchDir, `${launchId}.stdout.log`)
+  const stderrPath = join(launchDir, `${launchId}.stderr.log`)
+
+  const args = ['run', './scripts/autoresearch.ts', 'run', projectName, '--iterations', String(iterations)]
+  if (model) {
+    args.push('--model', model)
+  }
+  const stdoutFd = openSync(stdoutPath, 'a')
+  const stderrFd = openSync(stderrPath, 'a')
+  const child = spawn('bun', args, {
+    cwd: repoRoot,
+    detached: true,
+    stdio: ['ignore', stdoutFd, stderrFd],
+  })
+  child.unref()
+  closeSync(stdoutFd)
+  closeSync(stderrFd)
+
+  const pid = child.pid
+  if (!Number.isInteger(pid) || pid <= 0) {
+    throw new Error('Failed to obtain pid for supervised main loop')
+  }
+
+  const now = new Date().toISOString()
+  const lock: MainRunLock = {
+    project: projectName,
+    pid,
+    startedAt: now,
+    heartbeatAt: now,
+    launchedBy: 'sentinel',
+    iterations,
+    dryRun: false,
+    model,
+  }
+  saveMainRunLock(projectName, lock)
+  return lock
 }
 
 async function sleepMs(ms: number): Promise<void> {
@@ -3099,176 +3293,209 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
   ensureDir(runsRoot)
 
   let state = loadProjectState(projectName)
-
-  for (let iteration = 0; iteration < iterations; iteration += 1) {
-    const persistRunRecord = (runRecord: RunRecord): void => {
-      state.totalRuns += 1
-      state.lastRun = runRecord
-      writeJsonFile(join(runDir, 'result.json'), runRecord)
-      saveProjectState(projectName, state)
-
-      const health = buildHealthReport(
-        projectName,
-        config,
-        state,
-        runEvaluation(root, config).parsed,
-      )
-      writeSentinelArtifacts(projectName, config, state, health)
-    }
-
-    const currentEvaluation = runEvaluation(root, config).parsed
-    const sequence = state.totalRuns + 1
-    const runId = `${new Date().toISOString().replaceAll(':', '').replaceAll('.', '').replaceAll('-', '')}-${String(sequence).padStart(4, '0')}`
-    const runDir = join(runsRoot, runId)
-    const candidateRoot = join(runDir, 'candidate')
-    const outputPath = join(runDir, 'codex-last-message.md')
-    ensureDir(runDir)
-    cpSync(root, candidateRoot, { recursive: true })
-
-    const prompt = buildCodexPrompt(config, currentEvaluation, runDir)
-    writeFileSync(join(runDir, 'prompt.md'), prompt, 'utf8')
-
-    let codexExitCode: number | null = null
-    let codexStdout = ''
-    let codexStderr = ''
-    let changedFiles: string[] = []
-    let invalidChanges: string[] = []
-    const ignoredDiffRoots = getIgnoredDiffRoots(config)
-
-    if (!dryRun) {
-      const codexResult = await runCodexIteration(
-        candidateRoot,
-        prompt,
-        config,
-        outputPath,
-        parsedArgs,
-      )
-      codexExitCode = codexResult.exitCode
-      codexStdout = codexResult.stdout
-      codexStderr = codexResult.stderr
-      writeFileSync(join(runDir, 'codex-stdout.log'), codexStdout, 'utf8')
-      writeFileSync(join(runDir, 'codex-stderr.log'), codexStderr, 'utf8')
-      changedFiles = changedFilesBetween(root, candidateRoot)
-      changedFiles = filterIgnoredPaths(changedFiles, ignoredDiffRoots)
-      invalidChanges = changedFiles.filter(
-        file => !isAllowedPath(file, config.allowed_edit_roots),
-      )
-
-      if (codexResult.timedOut) {
-        const baselineScore = state.bestScore ?? currentEvaluation.score
-        const failureMessage = `Codex iteration timed out in run ${runId} after ${getNumberFlag(parsedArgs, 'codex-timeout-minutes', config.codex?.timeout_minutes ?? 30)} minute(s)`
-        state.failedRuns.push(runId)
-        persistRunRecord({
-          runId,
-          status: 'failed',
-          dryRun,
-          score: currentEvaluation.score,
-          scoreDelta: 0,
-          baselineScore,
-          bestScoreAfterRun: state.bestScore ?? currentEvaluation.score,
-          changedFiles,
-          invalidChanges,
-          codexExitCode,
-          evaluation: currentEvaluation,
-          createdAt: new Date().toISOString(),
-          timedOut: true,
-          error: failureMessage,
-        })
-        throw new Error(
-          failureMessage,
-        )
-      }
-
-      if (codexExitCode !== 0) {
-        const baselineScore = state.bestScore ?? currentEvaluation.score
-        const failureMessage = `Codex iteration failed in run ${runId} with exit code ${codexExitCode}\n${codexStderr || codexStdout}`
-        state.failedRuns.push(runId)
-        persistRunRecord({
-          runId,
-          status: 'failed',
-          dryRun,
-          score: currentEvaluation.score,
-          scoreDelta: 0,
-          baselineScore,
-          bestScoreAfterRun: state.bestScore ?? currentEvaluation.score,
-          changedFiles,
-          invalidChanges,
-          codexExitCode,
-          evaluation: currentEvaluation,
-          createdAt: new Date().toISOString(),
-          error: failureMessage,
-        })
-        throw new Error(
-          failureMessage,
-        )
-      }
-    } else {
-      writeFileSync(
-        outputPath,
-        'Dry run: controller skipped codex exec and evaluated the current workspace snapshot.\n',
-        'utf8',
-      )
-    }
-
-    if (dryRun) {
-      changedFiles = changedFilesBetween(root, candidateRoot)
-      changedFiles = filterIgnoredPaths(changedFiles, ignoredDiffRoots)
-      invalidChanges = changedFiles.filter(
-        file => !isAllowedPath(file, config.allowed_edit_roots),
-      )
-    }
-
-    const evaluation = runEvaluation(candidateRoot, config).parsed
-    writeJsonFile(join(runDir, 'evaluation.json'), evaluation)
-
-    const baselineScore = state.bestScore ?? currentEvaluation.score
-    const minimumImprovement = config.minimum_improvement ?? 0
-    const scoreDelta = Number((evaluation.score - baselineScore).toFixed(3))
-    const improvedEnough =
-      state.bestScore === null ||
-      evaluation.score >= state.bestScore + minimumImprovement
-    const accepted = invalidChanges.length === 0 && improvedEnough
-    const status: RunRecord['status'] =
-      state.bestScore === null && changedFiles.length === 0 && dryRun
-        ? 'baseline'
-        : accepted
-          ? 'accepted'
-          : 'rejected'
-
-    if (accepted) {
-      syncAllowedRoots(candidateRoot, root, config.allowed_edit_roots)
-      state.bestScore = evaluation.score
-      state.bestRunId = runId
-      state.acceptedRuns.push(runId)
-    } else {
-      state.rejectedRuns.push(runId)
-    }
-
-    const runRecord: RunRecord = {
-      runId,
-      status,
-      dryRun,
-      score: evaluation.score,
-      scoreDelta,
-      baselineScore,
-      bestScoreAfterRun: state.bestScore ?? evaluation.score,
-      changedFiles,
-      invalidChanges,
-      codexExitCode,
-      evaluation,
-      createdAt: new Date().toISOString(),
-    }
-
-    persistRunRecord(runRecord)
-
-    console.log(
-      `${runId}: ${status} score=${evaluation.score} delta=${scoreDelta} changed=${changedFiles.length} invalid=${invalidChanges.length}`,
+  const existingLock = loadActiveMainRunLock(projectName, config)
+  if (existingLock && existingLock.pid !== process.pid) {
+    throw new Error(
+      `Main research loop is already active for ${projectName} (pid=${existingLock.pid}, launchedBy=${existingLock.launchedBy}).`,
     )
+  }
 
-    if (shouldEventTriggerSentinel(config, runRecord)) {
-      await runSentinelPass(parseArgs([projectName, '--refresh-protected']))
-      config = loadProjectConfig(projectName)
+  const now = new Date().toISOString()
+  const runLock: MainRunLock = {
+    project: projectName,
+    pid: process.pid,
+    startedAt: existingLock?.startedAt ?? now,
+    heartbeatAt: now,
+    launchedBy: existingLock?.launchedBy ?? 'user',
+    iterations,
+    dryRun,
+    model: getStringFlag(parsedArgs, 'model') ?? config.codex?.model,
+  }
+  saveMainRunLock(projectName, runLock)
+  const heartbeatTimer = setInterval(() => {
+    saveMainRunLock(projectName, {
+      ...runLock,
+      heartbeatAt: new Date().toISOString(),
+    })
+  }, 10_000)
+  let shouldTriggerSentinelAfterRun = false
+
+  try {
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      const persistRunRecord = (runRecord: RunRecord): void => {
+        state.totalRuns += 1
+        state.lastRun = runRecord
+        writeJsonFile(join(runDir, 'result.json'), runRecord)
+        saveProjectState(projectName, state)
+
+        const health = buildHealthReport(
+          projectName,
+          config,
+          state,
+          runEvaluation(root, config).parsed,
+        )
+        writeSentinelArtifacts(projectName, config, state, health)
+      }
+
+      const currentEvaluation = runEvaluation(root, config).parsed
+      const sequence = state.totalRuns + 1
+      const runId = `${new Date().toISOString().replaceAll(':', '').replaceAll('.', '').replaceAll('-', '')}-${String(sequence).padStart(4, '0')}`
+      const runDir = join(runsRoot, runId)
+      const candidateRoot = join(runDir, 'candidate')
+      const outputPath = join(runDir, 'codex-last-message.md')
+      ensureDir(runDir)
+      cpSync(root, candidateRoot, { recursive: true })
+
+      const prompt = buildCodexPrompt(config, currentEvaluation, runDir)
+      writeFileSync(join(runDir, 'prompt.md'), prompt, 'utf8')
+
+      let codexExitCode: number | null = null
+      let codexStdout = ''
+      let codexStderr = ''
+      let changedFiles: string[] = []
+      let invalidChanges: string[] = []
+      const ignoredDiffRoots = getIgnoredDiffRoots(config)
+
+      if (!dryRun) {
+        const codexResult = await runCodexIteration(
+          candidateRoot,
+          prompt,
+          config,
+          outputPath,
+          parsedArgs,
+        )
+        codexExitCode = codexResult.exitCode
+        codexStdout = codexResult.stdout
+        codexStderr = codexResult.stderr
+        writeFileSync(join(runDir, 'codex-stdout.log'), codexStdout, 'utf8')
+        writeFileSync(join(runDir, 'codex-stderr.log'), codexStderr, 'utf8')
+        changedFiles = changedFilesBetween(root, candidateRoot)
+        changedFiles = filterIgnoredPaths(changedFiles, ignoredDiffRoots)
+        invalidChanges = changedFiles.filter(
+          file => !isAllowedPath(file, config.allowed_edit_roots),
+        )
+
+        if (codexResult.timedOut) {
+          const baselineScore = state.bestScore ?? currentEvaluation.score
+          const failureMessage = `Codex iteration timed out in run ${runId} after ${getNumberFlag(parsedArgs, 'codex-timeout-minutes', config.codex?.timeout_minutes ?? 30)} minute(s)`
+          state.failedRuns.push(runId)
+          persistRunRecord({
+            runId,
+            status: 'failed',
+            dryRun,
+            score: currentEvaluation.score,
+            scoreDelta: 0,
+            baselineScore,
+            bestScoreAfterRun: state.bestScore ?? currentEvaluation.score,
+            changedFiles,
+            invalidChanges,
+            codexExitCode,
+            evaluation: currentEvaluation,
+            createdAt: new Date().toISOString(),
+            timedOut: true,
+            error: failureMessage,
+          })
+          shouldTriggerSentinelAfterRun = true
+          throw new Error(
+            failureMessage,
+          )
+        }
+
+        if (codexExitCode !== 0) {
+          const baselineScore = state.bestScore ?? currentEvaluation.score
+          const failureMessage = `Codex iteration failed in run ${runId} with exit code ${codexExitCode}\n${codexStderr || codexStdout}`
+          state.failedRuns.push(runId)
+          persistRunRecord({
+            runId,
+            status: 'failed',
+            dryRun,
+            score: currentEvaluation.score,
+            scoreDelta: 0,
+            baselineScore,
+            bestScoreAfterRun: state.bestScore ?? currentEvaluation.score,
+            changedFiles,
+            invalidChanges,
+            codexExitCode,
+            evaluation: currentEvaluation,
+            createdAt: new Date().toISOString(),
+            error: failureMessage,
+          })
+          shouldTriggerSentinelAfterRun = true
+          throw new Error(
+            failureMessage,
+          )
+        }
+      } else {
+        writeFileSync(
+          outputPath,
+          'Dry run: controller skipped codex exec and evaluated the current workspace snapshot.\n',
+          'utf8',
+        )
+      }
+
+      if (dryRun) {
+        changedFiles = changedFilesBetween(root, candidateRoot)
+        changedFiles = filterIgnoredPaths(changedFiles, ignoredDiffRoots)
+        invalidChanges = changedFiles.filter(
+          file => !isAllowedPath(file, config.allowed_edit_roots),
+        )
+      }
+
+      const evaluation = runEvaluation(candidateRoot, config).parsed
+      writeJsonFile(join(runDir, 'evaluation.json'), evaluation)
+
+      const baselineScore = state.bestScore ?? currentEvaluation.score
+      const minimumImprovement = config.minimum_improvement ?? 0
+      const scoreDelta = Number((evaluation.score - baselineScore).toFixed(3))
+      const improvedEnough =
+        state.bestScore === null ||
+        evaluation.score >= state.bestScore + minimumImprovement
+      const accepted = invalidChanges.length === 0 && improvedEnough
+      const status: RunRecord['status'] =
+        state.bestScore === null && changedFiles.length === 0 && dryRun
+          ? 'baseline'
+          : accepted
+            ? 'accepted'
+            : 'rejected'
+
+      if (accepted) {
+        syncAllowedRoots(candidateRoot, root, config.allowed_edit_roots)
+        state.bestScore = evaluation.score
+        state.bestRunId = runId
+        state.acceptedRuns.push(runId)
+      } else {
+        state.rejectedRuns.push(runId)
+      }
+
+      const runRecord: RunRecord = {
+        runId,
+        status,
+        dryRun,
+        score: evaluation.score,
+        scoreDelta,
+        baselineScore,
+        bestScoreAfterRun: state.bestScore ?? evaluation.score,
+        changedFiles,
+        invalidChanges,
+        codexExitCode,
+        evaluation,
+        createdAt: new Date().toISOString(),
+      }
+
+      persistRunRecord(runRecord)
+      shouldTriggerSentinelAfterRun ||= !runRecord.dryRun
+
+      console.log(
+        `${runId}: ${status} score=${evaluation.score} delta=${scoreDelta} changed=${changedFiles.length} invalid=${invalidChanges.length}`,
+      )
     }
+  } finally {
+    clearInterval(heartbeatTimer)
+    clearMainRunLock(projectName)
+  }
+
+  if (shouldTriggerSentinelAfterRun && !dryRun) {
+    await runSentinelPass(parseArgs([projectName, '--refresh-protected']))
   }
 }
 
@@ -3309,6 +3536,23 @@ async function runSentinelPass(
     evaluation = runEvaluation(projectDir(projectName), config).parsed
     report = buildHealthReport(projectName, config, state, evaluation)
     writeSentinelArtifacts(projectName, config, state, report)
+  }
+
+  const activeMainRun = loadActiveMainRunLock(projectName, config)
+  if (!activeMainRun) {
+    const autoResumeDecision = shouldSentinelLaunchMainLoop(config, report)
+    if (autoResumeDecision.launch) {
+      const launched = launchMainLoopOnce(projectName, config)
+      console.log(
+        `Sentinel launched main research loop pid=${launched.pid} iterations=${launched.iterations} model=${launched.model ?? 'default'}`,
+      )
+    } else {
+      console.log(`Sentinel did not launch main loop: ${autoResumeDecision.reason}`)
+    }
+  } else {
+    console.log(
+      `Sentinel observed active main research loop pid=${activeMainRun.pid} launchedBy=${activeMainRun.launchedBy}`,
+    )
   }
 
   console.log(

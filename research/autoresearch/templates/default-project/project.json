@@ -20,9 +20,13 @@
   "sentinel": {
     "codex_model": "gpt-5.4-medium",
     "codex_timeout_minutes": 15,
+    "interval_minutes": 10,
     "interval_hours": 6,
     "stagnation_threshold": 3,
     "event_trigger_on_run_complete": true,
+    "supervise_main_loop": true,
+    "main_loop_iterations_per_launch": 1,
+    "main_loop_idle_threshold_minutes": 5,
     "allowed_edit_roots": [
       "scripts/autoresearch.ts",
       "research/autoresearch/README.md",
