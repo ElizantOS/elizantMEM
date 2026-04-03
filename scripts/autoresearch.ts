@@ -1354,14 +1354,6 @@ function copyPathsIntoRoot(
     if (!existsSync(sourcePath)) continue
 
     const targetPath = join(targetRoot, relativePath)
-    const sourceResolved = resolve(sourcePath)
-    const targetResolved = resolve(targetPath)
-    if (
-      targetResolved === sourceResolved ||
-      targetResolved.startsWith(`${sourceResolved}/`)
-    ) {
-      continue
-    }
     ensureDir(dirname(targetPath))
     cpSync(sourcePath, targetPath, { recursive: true })
   }
@@ -2028,81 +2020,130 @@ function generateDashboardHtml(
   <title>Autoresearch Dashboard - ${projectName}</title>
   <style>
     :root {
-      --bg: #f2efe8;
-      --panel: #fffdf7;
-      --ink: #1b1a17;
-      --muted: #6d675c;
-      --accent: #0f766e;
-      --warn: #c2410c;
+      --bg: #efe8d8;
+      --panel: #fffaf0;
+      --panel-strong: #f6efe1;
+      --ink: #181512;
+      --muted: #6b6257;
+      --accent: #0e7490;
+      --accent-2: #14532d;
+      --warn: #b45309;
       --bad: #b91c1c;
-      --border: #d8d1c3;
+      --good: #166534;
+      --border: #d7ccb9;
+      --line: #e7dcc9;
+      --shadow: rgba(56, 43, 24, 0.08);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
       background:
-        radial-gradient(circle at top left, rgba(15,118,110,0.08), transparent 30%),
-        linear-gradient(180deg, #f7f4ed 0%, var(--bg) 100%);
+        radial-gradient(circle at top left, rgba(14,116,144,0.10), transparent 28%),
+        radial-gradient(circle at top right, rgba(20,83,45,0.08), transparent 24%),
+        linear-gradient(180deg, #f7f1e4 0%, var(--bg) 100%);
       color: var(--ink);
     }
     main {
-      max-width: 1280px;
+      max-width: 1380px;
       margin: 0 auto;
-      padding: 28px 20px 48px;
+      padding: 28px 20px 56px;
     }
     .hero {
       display: grid;
-      gap: 14px;
-      margin-bottom: 20px;
+      gap: 16px;
+      margin-bottom: 18px;
     }
-    h1, h2, h3 { margin: 0; }
-    h1 { font-size: clamp(2rem, 4vw, 3.5rem); line-height: 0.95; }
+    h1, h2, h3, h4 { margin: 0; }
+    h1 {
+      font-size: clamp(2.4rem, 5vw, 4.4rem);
+      line-height: 0.92;
+      letter-spacing: -0.03em;
+    }
+    h2 {
+      font-size: 1.15rem;
+      letter-spacing: 0.01em;
+    }
     p { margin: 0; color: var(--muted); }
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.76rem;
+      color: var(--accent);
+    }
     .grid {
       display: grid;
       grid-template-columns: repeat(12, 1fr);
       gap: 16px;
-      margin-top: 18px;
     }
     .card {
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 18px;
-      padding: 18px;
-      box-shadow: 0 8px 24px rgba(27,26,23,0.04);
+      border-radius: 22px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 10px 28px var(--shadow);
+    }
+    .card.hero-card {
+      padding: 22px;
+      background:
+        linear-gradient(135deg, rgba(14,116,144,0.07), transparent 45%),
+        linear-gradient(180deg, rgba(255,255,255,0.52), transparent 100%),
+        var(--panel);
     }
     .span-3 { grid-column: span 3; }
     .span-4 { grid-column: span 4; }
     .span-6 { grid-column: span 6; }
     .span-8 { grid-column: span 8; }
+    .span-9 { grid-column: span 9; }
     .span-12 { grid-column: span 12; }
     .metric {
       display: grid;
-      gap: 4px;
+      gap: 6px;
     }
     .metric-value {
-      font-size: 2rem;
+      font-size: 2.1rem;
       font-weight: 700;
       color: var(--accent);
+      line-height: 1;
     }
     .chip {
       display: inline-block;
-      padding: 4px 10px;
+      padding: 5px 10px;
       border-radius: 999px;
       border: 1px solid var(--border);
       font-size: 0.85rem;
       margin-right: 8px;
       margin-bottom: 8px;
       color: var(--muted);
+      background: rgba(255,255,255,0.6);
+    }
+    .phase-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(14,116,144,0.18);
+      background: rgba(14,116,144,0.08);
+      color: var(--accent);
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .phase-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 6px rgba(14,116,144,0.12);
     }
     .issue {
-      border-left: 4px solid var(--border);
-      padding-left: 10px;
+      border-left: 4px solid var(--line);
+      padding-left: 12px;
       margin-bottom: 12px;
     }
     .issue.warning { border-left-color: var(--warn); }
     .issue.critical { border-left-color: var(--bad); }
+    .issue.info { border-left-color: var(--accent); }
     .table {
       width: 100%;
       border-collapse: collapse;
@@ -2111,12 +2152,196 @@ function generateDashboardHtml(
     .table th, .table td {
       text-align: left;
       padding: 10px 8px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--line);
       vertical-align: top;
     }
+    .table.compact th, .table.compact td {
+      padding: 7px 6px;
+      font-size: 0.88rem;
+    }
     .mono { font-family: "SFMono-Regular", Menlo, monospace; font-size: 0.9rem; }
+    .hero-layout {
+      display: grid;
+      grid-template-columns: 2.2fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .hero-copy {
+      display: grid;
+      gap: 12px;
+    }
+    .hero-stats {
+      display: grid;
+      gap: 12px;
+    }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .mini-stat {
+      background: rgba(255,255,255,0.58);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px;
+    }
+    .mini-stat-label {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .mini-stat-value {
+      margin-top: 6px;
+      font-size: 1.36rem;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .section-lead {
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+    .readiness {
+      display: grid;
+      gap: 14px;
+    }
+    .readiness-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .readiness-score {
+      font-size: 2.5rem;
+      line-height: 0.92;
+      font-weight: 700;
+      color: var(--accent-2);
+    }
+    .progress {
+      width: 100%;
+      height: 12px;
+      border-radius: 999px;
+      background: #e8dece;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border-radius: 999px;
+    }
+    .metric-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .metric-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) 72px;
+      gap: 12px;
+      align-items: center;
+    }
+    .metric-row strong {
+      display: block;
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+    }
+    .metric-track {
+      height: 10px;
+      background: #eadfcd;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .metric-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    }
+    .metric-score {
+      text-align: right;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .blocker-list {
+      display: grid;
+      gap: 8px;
+    }
+    .blocker {
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(180,83,9,0.22);
+      background: rgba(180,83,9,0.08);
+      color: #8a3a08;
+      font-size: 0.92rem;
+    }
+    .success-note {
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(22,101,52,0.18);
+      background: rgba(22,101,52,0.08);
+      color: var(--good);
+      font-size: 0.92rem;
+    }
+    .phase-reason {
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+    }
+    .action-card {
+      display: grid;
+      gap: 12px;
+    }
+    .action-command {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #1f2937;
+      color: #f9fafb;
+      font-family: "SFMono-Regular", Menlo, monospace;
+      font-size: 0.88rem;
+      overflow: auto;
+    }
+    .timeline {
+      display: grid;
+      gap: 10px;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 12px 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      margin-top: 5px;
+      background: var(--accent);
+    }
+    .timeline-dot.rejected { background: var(--warn); }
+    .timeline-dot.failed { background: var(--bad); }
+    .timeline-dot.accepted { background: var(--good); }
+    .timeline-body {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.55);
+      border-radius: 16px;
+      padding: 12px 14px;
+    }
+    .timeline-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+    .subdued {
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
     @media (max-width: 900px) {
       .span-3, .span-4, .span-6, .span-8, .span-12 { grid-column: span 12; }
+      .span-9 { grid-column: span 12; }
+      .hero-layout { grid-template-columns: 1fr; }
+      .mini-grid { grid-template-columns: 1fr 1fr; }
+      .metric-row { grid-template-columns: 1fr; }
+      .metric-score { text-align: left; }
     }
   </style>
 </head>
@@ -2135,6 +2360,10 @@ function generateDashboardHtml(
     const report = data.report;
     const app = document.getElementById('app');
     const fmt = (value) => value === null || value === undefined ? 'n/a' : String(value);
+    const titleize = (value) => String(value || '')
+      .split('_')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
     const issues = report?.issues ?? [];
     const queue = report?.maintenanceQueue ?? [];
     const runs = report?.recentRuns ?? [];
@@ -2142,19 +2371,119 @@ function generateDashboardHtml(
     const protectedDrift = report?.protectedFiles?.drift ?? [];
     const gitLines = report?.versioning?.gitStatusLines ?? [];
     const metrics = Object.entries(data.evaluation.metrics ?? {});
+    const phaseCurrent = report?.phase?.current ?? 'n/a';
+    const phaseReason = report?.phase?.reason ?? 'No phase reason recorded.';
+    const completedMetrics = metrics.filter(([, value]) => Number(value) >= 1).length;
+    const readinessPercent = metrics.length ? Math.round((completedMetrics / metrics.length) * 100) : 0;
+    const blockerMetrics = metrics
+      .filter(([, value]) => Number(value) < 1)
+      .sort((a, b) => Number(a[1]) - Number(b[1]));
+    const nextAction = queue[0] ?? null;
+    const lastRun = data.state.lastRun;
+    const acceptedCount = report?.summary?.acceptedRuns ?? data.state.acceptedRuns?.length ?? 0;
+    const rejectedCount = report?.summary?.rejectedRuns ?? data.state.rejectedRuns?.length ?? 0;
+    const failedCount = report?.summary?.failedRuns ?? data.state.failedRuns?.length ?? 0;
+    const runMix = acceptedCount + rejectedCount + failedCount;
+    const acceptRate = runMix > 0 ? Math.round((acceptedCount / runMix) * 100) : 0;
 
-    const metricsHtml = [
-      ['Phase', fmt(report?.phase?.current)],
-      ['Current score', fmt(data.evaluation.score)],
-      ['Best score', fmt(data.state.bestScore)],
-      ['Total runs', fmt(data.state.totalRuns)],
-      ['Last run', data.state.lastRun ? data.state.lastRun.status : 'n/a'],
-      ['Last promoted', fmt(report?.summary?.lastPromotedRunId)],
+    const heroHtml = \`
+      <section class="card hero-card span-12">
+        <div class="hero-layout">
+          <div class="hero-copy">
+            <span class="eyebrow">Autonomous Research Cockpit</span>
+            <h1>\${projectName}</h1>
+            <p>\${config.description}</p>
+            <div>
+              <span class="phase-chip"><span class="phase-dot"></span>\${titleize(phaseCurrent)}</span>
+            </div>
+            <div class="phase-reason">
+              <strong>Current experiment objective</strong>
+              <p class="section-lead">\${phaseReason}</p>
+            </div>
+            <div>
+              <span class="chip">best run: \${fmt(report?.summary?.lastPromotedRunId)}</span>
+              <span class="chip">accept rate: \${acceptRate}%</span>
+              <span class="chip">issues: \${issues.length}</span>
+            </div>
+          </div>
+          <div class="hero-stats">
+            <div class="mini-grid">
+              <div class="mini-stat">
+                <div class="mini-stat-label">Experiment readiness</div>
+                <div class="mini-stat-value">\${readinessPercent}%</div>
+              </div>
+              <div class="mini-stat">
+                <div class="mini-stat-label">Current score</div>
+                <div class="mini-stat-value">\${fmt(data.evaluation.score)}</div>
+              </div>
+              <div class="mini-stat">
+                <div class="mini-stat-label">Best score</div>
+                <div class="mini-stat-value">\${fmt(data.state.bestScore)}</div>
+              </div>
+              <div class="mini-stat">
+                <div class="mini-stat-label">Last run</div>
+                <div class="mini-stat-value">\${lastRun ? titleize(lastRun.status) : 'n/a'}</div>
+              </div>
+            </div>
+            <div class="card" style="padding:14px 16px;">
+              <h2>Immediate next action</h2>
+              \${nextAction ? \`
+                <p class="section-lead">\${nextAction.title}</p>
+                <div class="action-command">\${nextAction.command}</div>
+              \` : '<p class="section-lead">No queued action.</p>'}
+            </div>
+          </div>
+        </div>
+      </section>
+    \`;
+
+    const readinessHtml = \`
+      <section class="card span-8">
+        <div class="readiness">
+          <div class="readiness-header">
+            <div>
+              <h2>Experiment Readiness</h2>
+              <p class="section-lead">How close the current lane is to its active phase contract.</p>
+            </div>
+            <div class="readiness-score">\${completedMetrics}/\${metrics.length}</div>
+          </div>
+          <div class="progress"><div class="progress-bar" style="width:\${readinessPercent}%"></div></div>
+          <div class="metric-stack">
+            \${metrics.map(([key, value]) => {
+              const score = Math.max(0, Math.min(1, Number(value)));
+              return \`
+                <div class="metric-row">
+                  <div>
+                    <strong>\${titleize(key)}</strong>
+                    <div class="metric-track"><div class="metric-fill" style="width:\${score * 100}%"></div></div>
+                  </div>
+                  <div class="metric-score">\${score.toFixed(2)}</div>
+                </div>
+              \`
+            }).join('')}
+          </div>
+        </div>
+      </section>
+      <section class="card span-4">
+        <h2>Blockers</h2>
+        <p class="section-lead">Metrics below full completion are what currently block phase completion or promotion.</p>
+        <div style="margin-top:12px;" class="blocker-list">
+          \${blockerMetrics.length ? blockerMetrics.map(([key, value]) => \`
+            <div class="blocker"><strong>\${titleize(key)}</strong><br/>score=\${Number(value).toFixed(2)}</div>
+          \`).join('') : '<div class="success-note">No blocker metrics. The active contract is fully satisfied.</div>'}
+        </div>
+      </section>
+    \`;
+
+    const runPressureHtml = [
+      ['Accepted runs', acceptedCount],
+      ['Rejected runs', rejectedCount],
+      ['Failed runs', failedCount],
       ['Reject streak', fmt(report?.summary?.consecutiveRejectedRuns)],
       ['No-change streak', fmt(report?.summary?.consecutiveNoChangeRuns)],
-      ['Issue count', fmt(issues.length)],
+      ['Issue count', issues.length],
     ].map(([label, value]) => \`
-      <article class="card span-3">
+      <article class="card span-4">
         <div class="metric">
           <span>\${label}</span>
           <span class="metric-value">\${value}</span>
@@ -2162,54 +2491,68 @@ function generateDashboardHtml(
       </article>
     \`).join('');
 
-    const summaryCard = \`
-      <section class="card span-8">
+    const summaryHtml = \`
+      <section class="card span-6">
         <h2>Project Summary</h2>
-        <p style="margin-top:10px;">\${data.evaluation.summary}</p>
-        <p style="margin-top:10px;">Recommendation: \${data.evaluation.recommendation ?? 'n/a'}</p>
-        <p style="margin-top:10px;">Sentinel phase: \${report?.phase?.current ?? 'n/a'}</p>
+        <p class="section-lead">\${data.evaluation.summary}</p>
+        <p class="section-lead">Recommendation: \${data.evaluation.recommendation ?? 'n/a'}</p>
         <div style="margin-top:14px;">
-          <span class="chip">workspace only promotions</span>
+          <span class="chip">phase: \${titleize(phaseCurrent)}</span>
           <span class="chip">protected goals tracked</span>
-          <span class="chip">dashboard regenerated by sentinel</span>
+          <span class="chip">event-triggered sentinel enabled</span>
         </div>
       </section>
-      <section class="card span-4">
-        <h2>Evaluator Metrics</h2>
-        <table class="table" style="margin-top:12px;">
-          <tbody>
-            \${metrics.length ? metrics.map(([key, value]) => \`
-              <tr><td class="mono">\${key}</td><td>\${value}</td></tr>
-            \`).join('') : '<tr><td>No metrics</td><td></td></tr>'}
-          </tbody>
-        </table>
-      </section>
-    \`;
-
-    const issuesHtml = \`
       <section class="card span-6">
-        <h2>Health Issues</h2>
+        <h2>Health & Decisions</h2>
         <div style="margin-top:12px;">
           \${issues.length ? issues.map(issue => \`
             <div class="issue \${issue.severity}">
               <strong>\${issue.summary}</strong>
               <p style="margin-top:6px;">\${issue.suggestedAction}</p>
             </div>
-          \`).join('') : '<p>No active issues.</p>'}
+          \`).join('') : '<div class="success-note">No active health issues. The current blocker is experiment completeness, not system instability.</div>'}
         </div>
-      </section>
-      <section class="card span-6">
-        <h2>Version Status</h2>
-        <pre class="mono" style="white-space:pre-wrap; margin-top:12px;">\${gitLines.join('\\n')}</pre>
-        <h3 style="margin-top:16px;">Protected Drift</h3>
-        <pre class="mono" style="white-space:pre-wrap; margin-top:12px;">\${protectedDrift.length ? protectedDrift.join('\\n') : 'none'}</pre>
       </section>
     \`;
 
-    const maintenanceHtml = \`
-      <section class="card span-12">
+    const runsHtml = \`
+      <section class="card span-8">
+        <h2>Run Timeline</h2>
+        <p class="section-lead">Most recent iterations, ordered newest first.</p>
+        <div class="timeline" style="margin-top:12px;">
+          \${runs.length ? runs.map(run => \`
+            <div class="timeline-item">
+              <span class="timeline-dot \${run.status}"></span>
+              <div class="timeline-body">
+                <strong class="mono">\${run.runId}</strong>
+                <p class="section-lead">\${titleize(run.status)} run with score \${run.score} and delta \${run.scoreDelta}</p>
+                <div class="timeline-meta">
+                  <span>changed files: \${run.changedFiles.length}</span>
+                  <span>invalid writes: \${run.invalidChanges.length}</span>
+                  <span>dry run: \${run.dryRun ? 'yes' : 'no'}</span>
+                </div>
+              </div>
+            </div>
+          \`).join('') : '<p>No runs yet.</p>'}
+        </div>
+      </section>
+      <section class="card span-4">
+        <h2>Active Surfaces</h2>
+        <p class="section-lead">Files changing most often across recent runs.</p>
+        <table class="table compact" style="margin-top:12px;">
+          <tbody>
+            \${topFiles.length ? topFiles.map(item => \`
+              <tr><td class="mono">\${item.path}</td><td>\${item.count}</td></tr>
+            \`).join('') : '<tr><td>No file changes recorded.</td><td></td></tr>'}
+          </tbody>
+        </table>
+      </section>
+    \`;
+
+    const opsHtml = \`
+      <section class="card span-6">
         <h2>Maintenance Queue</h2>
-        <table class="table" style="margin-top:12px;">
+        <table class="table compact" style="margin-top:12px;">
           <thead>
             <tr><th>Action</th><th>Command</th></tr>
           </thead>
@@ -2223,42 +2566,16 @@ function generateDashboardHtml(
           </tbody>
         </table>
       </section>
-    \`;
-
-    const runsHtml = \`
-      <section class="card span-8">
-        <h2>Recent Runs</h2>
-        <table class="table" style="margin-top:12px;">
-          <thead>
-            <tr><th>Run</th><th>Status</th><th>Score</th><th>Delta</th><th>Changed</th><th>Invalid</th></tr>
-          </thead>
-          <tbody>
-            \${runs.length ? runs.map(run => \`
-              <tr>
-                <td class="mono">\${run.runId}</td>
-                <td>\${run.status}</td>
-                <td>\${run.score}</td>
-                <td>\${run.scoreDelta}</td>
-                <td>\${run.changedFiles.length}</td>
-                <td>\${run.invalidChanges.length}</td>
-              </tr>
-            \`).join('') : '<tr><td colspan="6">No runs yet.</td></tr>'}
-          </tbody>
-        </table>
-      </section>
-      <section class="card span-4">
-        <h2>Top Changed Files</h2>
-        <table class="table" style="margin-top:12px;">
-          <tbody>
-            \${topFiles.length ? topFiles.map(item => \`
-              <tr><td class="mono">\${item.path}</td><td>\${item.count}</td></tr>
-            \`).join('') : '<tr><td>No file changes recorded.</td><td></td></tr>'}
-          </tbody>
-        </table>
+      <section class="card span-6">
+        <h2>Version & Drift</h2>
+        <p class="section-lead">Operational context is retained, but intentionally de-emphasized below experiment status.</p>
+        <pre class="mono" style="white-space:pre-wrap; margin-top:12px;">\${gitLines.join('\\n')}</pre>
+        <h3 style="margin-top:14px;">Protected Drift</h3>
+        <pre class="mono" style="white-space:pre-wrap; margin-top:10px;">\${protectedDrift.length ? protectedDrift.join('\\n') : 'none'}</pre>
       </section>
     \`;
 
-    app.innerHTML = metricsHtml + summaryCard + issuesHtml + maintenanceHtml + runsHtml;
+    app.innerHTML = heroHtml + readinessHtml + runPressureHtml + summaryHtml + runsHtml + opsHtml;
   </script>
 </body>
 </html>`
