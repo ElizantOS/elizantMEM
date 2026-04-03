@@ -1,4 +1,6 @@
-# auto-research
+# elizantMEM
+
+Template-derived research repository built on top of the `auto-research` framework.
 
 Codex-native autonomous research framework inspired by `karpathy/autoresearch`, but adapted for product and systems research instead of single-file GPU training.
 
