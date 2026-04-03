@@ -1,6 +1,6 @@
 {
   "project": "memory-policy",
-  "generatedAt": "2026-04-03T03:42:34.720Z",
+  "generatedAt": "2026-04-03T05:45:35.889Z",
   "phase": {
     "current": "experiment_bootstrap",
     "reason": "The research design is saturated enough to begin implementing trace, ledger, replay, baseline, and metric scaffolds.",
@@ -10,6 +10,17 @@
       "implementation_enabled=true"
     ],
     "updatedAt": "2026-04-03T02:57:20.258Z"
+  },
+  "currentResearch": {
+    "active": false,
+    "runId": "20260403T020128539Z-0005",
+    "pid": null,
+    "launchedBy": "n/a",
+    "startedAt": null,
+    "heartbeatAt": null,
+    "noteExcerpt": "# Iteration Notes - hypothesis: seed the workspace with a paper/design/experiment baseline before autonomous optimization begins - changed files: initial workspace scaffold - expected effect: establish a stable starting…",
+    "promptExcerpt": "You are operating inside an autonomous research loop inspired by karpathy/autoresearch. Project: memory-policy Run directory: /Users/echo/project/Elizant/claude-code-sourcemap-main/gpt-code/.autoresearch/projects/memory…",
+    "lastMessageExcerpt": null
   },
   "evaluation": {
     "score": 9,
@@ -49,10 +60,12 @@
       },
       {
         "path": "project.json",
-        "digest": "1100fb9d9eefa7b7a151601329e625d463cd1891"
+        "digest": "854e060092a991673dfdedb5449a382e39ad60d8"
       }
     ],
-    "drift": []
+    "drift": [
+      "project.json"
+    ]
   },
   "versioning": {
     "gitStatusLines": [
@@ -426,11 +439,18 @@
       "count": 2
     }
   ],
-  "issues": [],
+  "issues": [
+    {
+      "id": "protected-file-drift",
+      "severity": "critical",
+      "summary": "Protected files changed since the last sentinel snapshot: project.json",
+      "suggestedAction": "Review whether goal/program/evaluation changes were intentional, then refresh the protected manifest if approved."
+    }
+  ],
   "maintenanceQueue": [
     {
-      "title": "Refresh sentinel artifacts",
-      "command": "bun run autoresearch sentinel memory-policy"
+      "title": "Review protected file drift",
+      "command": "git diff -- /private/tmp/elizantMEM-fix/research/autoresearch/projects/memory-policy"
     }
   ]
 }

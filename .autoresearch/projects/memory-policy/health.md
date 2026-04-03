@@ -1,7 +1,7 @@
 # Sentinel Health Report
 
 Project: memory-policy
-Generated: 2026-04-03T03:42:34.720Z
+Generated: 2026-04-03T05:45:35.889Z
 Current evaluation score: 9
 Current evaluation summary: The workspace is coherent enough to hand off for implementation-oriented experimentation.
 Current sentinel phase: experiment_bootstrap
@@ -22,7 +22,7 @@ Current sentinel phase: experiment_bootstrap
 ## Protected Files
 
 - tracked: 3
-- drift: none
+- drift: project.json
 
 ## Versioning
 
@@ -30,7 +30,8 @@ Current sentinel phase: experiment_bootstrap
 
 ## Issues
 
-- none
+- [critical] Protected files changed since the last sentinel snapshot: project.json
+  Action: Review whether goal/program/evaluation changes were intentional, then refresh the protected manifest if approved.
 
 ## Recent Runs
 

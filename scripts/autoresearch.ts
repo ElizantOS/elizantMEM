@@ -122,6 +122,7 @@ type HealthReport = {
   project: string
   generatedAt: string
   phase: PhaseState
+  currentResearch: CurrentResearchSummary
   evaluation: EvaluationResult
   summary: {
     totalRuns: number
@@ -178,6 +179,19 @@ type MainRunLock = {
   iterations: number
   dryRun: boolean
   model?: string
+  currentRunId?: string
+}
+
+type CurrentResearchSummary = {
+  active: boolean
+  runId: string | null
+  pid: number | null
+  launchedBy: 'user' | 'sentinel' | 'n/a'
+  startedAt: string | null
+  heartbeatAt: string | null
+  noteExcerpt: string | null
+  promptExcerpt: string | null
+  lastMessageExcerpt: string | null
 }
 
 type ParsedArgs = {
@@ -286,6 +300,10 @@ function projectRunsDir(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'runs')
 }
 
+function projectRunDir(projectName: string, runId: string): string {
+  return join(projectRunsDir(projectName), runId)
+}
+
 function projectRunLockPath(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'run-lock.json')
 }
@@ -383,6 +401,17 @@ function saveMainRunLock(projectName: string, lock: MainRunLock): void {
 
 function clearMainRunLock(projectName: string): void {
   rmSync(projectRunLockPath(projectName), { force: true })
+}
+
+function readTextFileIfExists(path: string): string | null {
+  return existsSync(path) ? readTextFile(path) : null
+}
+
+function excerpt(text: string | null, maxLength = 220): string | null {
+  if (!text) return null
+  const compact = text.replace(/\s+/g, ' ').trim()
+  if (compact.length <= maxLength) return compact
+  return `${compact.slice(0, maxLength - 1)}…`
 }
 
 function processExists(pid: number): boolean {
@@ -2394,6 +2423,11 @@ function generateDashboardHtml(
       display: grid;
       gap: 10px;
     }
+    .timeline.compact {
+      max-height: 640px;
+      overflow: auto;
+      padding-right: 4px;
+    }
     .trend-card {
       display: grid;
       gap: 12px;
@@ -2445,6 +2479,42 @@ function generateDashboardHtml(
     .stack-segment.accepted { background: var(--good); }
     .stack-segment.rejected { background: var(--warn); }
     .stack-segment.failed { background: var(--bad); }
+    .research-live {
+      display: grid;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.52);
+    }
+    .research-live-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .research-live-title {
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .research-live-status {
+      font-weight: 700;
+      color: var(--accent-2);
+      font-size: 0.88rem;
+    }
+    .research-live p {
+      font-size: 0.92rem;
+    }
+    .research-live .label {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    .timeline-link {
+      text-decoration: none;
+      color: inherit;
+    }
     .timeline-item {
       display: grid;
       grid-template-columns: 12px 1fr;
@@ -2517,6 +2587,7 @@ function generateDashboardHtml(
     const metrics = Object.entries(data.evaluation.metrics ?? {});
     const phaseCurrent = report?.phase?.current ?? 'n/a';
     const phaseReason = report?.phase?.reason ?? 'No phase reason recorded.';
+    const currentResearch = report?.currentResearch ?? null;
     const completedMetrics = metrics.filter(([, value]) => Number(value) >= 1).length;
     const readinessPercent = metrics.length ? Math.round((completedMetrics / metrics.length) * 100) : 0;
     const blockerMetrics = metrics
@@ -2569,6 +2640,12 @@ function generateDashboardHtml(
         '</svg>';
     };
     const trendDelta = runs.length >= 2 ? Number(runs[0].score) - Number(runs[1].score) : 0;
+    const currentResearchSummary = currentResearch
+      ? (currentResearch.noteExcerpt || currentResearch.lastMessageExcerpt || currentResearch.promptExcerpt || 'The active run has started and is preparing its candidate changes.')
+      : null;
+    const sentinelView = issues.length
+      ? issues.map(issue => issue.summary).join(' | ')
+      : 'Sentinel sees no health blockers beyond the active experiment contract.';
 
     const heroHtml = \`
       <section class="card hero-card span-12">
@@ -2738,24 +2815,43 @@ function generateDashboardHtml(
               <span>delta vs previous: \${trendDelta >= 0 ? '+' : ''}\${trendDelta.toFixed(2)}</span>
             </div>
           </div>
+          <div class="research-live">
+            <div class="research-live-head">
+              <div class="research-live-title">Current research state</div>
+              <div class="research-live-status">\${currentResearch?.active ? 'ACTIVE' : 'IDLE'}</div>
+            </div>
+            <div class="label">sentinel assessment</div>
+            <p>\${sentinelView}</p>
+            <div class="label">research summary</div>
+            <p>\${currentResearchSummary ?? 'No active research worker right now. Sentinel will relaunch when supervision policy allows.'}</p>
+            <div class="timeline-meta">
+              <span>run: \${currentResearch?.runId ?? 'n/a'}</span>
+              <span>pid: \${currentResearch?.pid ?? 'n/a'}</span>
+              <span>source: \${currentResearch?.launchedBy ?? 'n/a'}</span>
+            </div>
+            \${currentResearch?.runId ? '<a class="back" href="runs/' + currentResearch.runId + '/index.html">Open active run →</a>' : ''}
+          </div>
         </div>
       </section>
       <section class="card span-8">
         <h2>Run Timeline</h2>
-        <p class="section-lead">Most recent iterations, ordered newest first.</p>
-        <div class="timeline" style="margin-top:12px;">
+        <p class="section-lead">Most recent iterations, ordered newest first. Click a run for the full single-run page.</p>
+        <div class="timeline compact" style="margin-top:12px;">
           \${runs.length ? runs.map(run => \`
             <div class="timeline-item">
               <span class="timeline-dot \${run.status}"></span>
-              <div class="timeline-body">
-                <strong class="mono">\${run.runId}</strong>
-                <p class="section-lead">\${titleize(run.status)} run with score \${run.score} and delta \${run.scoreDelta}</p>
-                <div class="timeline-meta">
-                  <span>changed files: \${run.changedFiles.length}</span>
-                  <span>invalid writes: \${run.invalidChanges.length}</span>
-                  <span>dry run: \${run.dryRun ? 'yes' : 'no'}</span>
+              <a class="timeline-link" href="runs/\${run.runId}/index.html">
+                <div class="timeline-body">
+                  <strong class="mono">\${run.runId}</strong>
+                  <p class="section-lead">\${titleize(run.status)} · score \${run.score} · delta \${run.scoreDelta}</p>
+                  <div class="timeline-meta">
+                    <span>changed: \${run.changedFiles.length}</span>
+                    <span>invalid: \${run.invalidChanges.length}</span>
+                    <span>dry run: \${run.dryRun ? 'yes' : 'no'}</span>
+                  </div>
+                  <p class="subdued" style="margin-top:8px;">\${run.evaluation.summary}</p>
                 </div>
-              </div>
+              </a>
             </div>
           \`).join('') : '<p>No runs yet.</p>'}
         </div>
@@ -2878,6 +2974,7 @@ function buildHealthReport(
     project: projectName,
     generatedAt: new Date().toISOString(),
     phase,
+    currentResearch: inferCurrentResearchSummary(projectName, config),
     evaluation,
     summary: {
       totalRuns: state.totalRuns,
@@ -2945,6 +3042,119 @@ function writeSentinelArtifacts(
   writeJsonFile(projectMaintenanceQueuePath(projectName), report.maintenanceQueue)
   writeHealthMarkdown(projectName, report)
   refreshDashboard(projectName, config, state, report.evaluation, report)
+  refreshRunDetailPages(projectName)
+}
+
+function generateRunDetailHtml(
+  projectName: string,
+  run: RunRecord,
+): string {
+  const runDir = projectRunDir(projectName, run.runId)
+  const prompt = excerpt(readTextFileIfExists(join(runDir, 'prompt.md')), 1200)
+  const lastMessage = excerpt(
+    readTextFileIfExists(join(runDir, 'codex-last-message.md')),
+    1200,
+  )
+  const stderr = excerpt(readTextFileIfExists(join(runDir, 'codex-stderr.log')), 1200)
+  const metrics = Object.entries(run.evaluation.metrics ?? {})
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${projectName} run ${run.runId}</title>
+  <style>
+    :root {
+      --bg: #f4efe4;
+      --panel: #fffaf1;
+      --ink: #181512;
+      --muted: #6a6258;
+      --accent: #0e7490;
+      --line: #e5dbc9;
+      --border: #d7ccb9;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: Georgia, serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 28px 18px 52px; display: grid; gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 18px; }
+    .back { color: var(--accent); text-decoration: none; font-weight: 700; }
+    h1, h2 { margin: 0; }
+    h1 { font-size: 2.2rem; }
+    h2 { font-size: 1rem; margin-bottom: 10px; }
+    p { margin: 0; color: var(--muted); }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .chip { display: inline-block; padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.86rem; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .mono { font-family: Menlo, monospace; font-size: 0.88rem; white-space: pre-wrap; word-break: break-word; }
+    .list { display: grid; gap: 8px; }
+    .list div { padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,0.55); border: 1px solid var(--line); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    td { padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <a class="back" href="../../dashboard.html">← Back to dashboard</a>
+      <h1 style="margin-top:10px;">Run ${run.runId}</h1>
+      <p style="margin-top:8px;">Status: ${run.status} · Score: ${run.score} · Delta: ${run.scoreDelta}</p>
+      <div class="meta">
+        <span class="chip">dry run: ${run.dryRun ? 'yes' : 'no'}</span>
+        <span class="chip">baseline: ${run.baselineScore}</span>
+        <span class="chip">best after run: ${run.bestScoreAfterRun}</span>
+        <span class="chip">created: ${run.createdAt}</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Sentinel Assessment</h2>
+        <p>${run.evaluation.summary}</p>
+        <p style="margin-top:10px;">Recommendation: ${run.evaluation.recommendation ?? 'n/a'}</p>
+        <table style="margin-top:12px;">
+          <tbody>
+            ${metrics.map(([key, value]) => `<tr><td>${key}</td><td>${value}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </section>
+      <section class="card">
+        <h2>Change Surface</h2>
+        <div class="list">
+          ${run.changedFiles.length ? run.changedFiles.map(path => `<div class="mono">${path}</div>`).join('') : '<div>No changed files recorded.</div>'}
+        </div>
+        <h2 style="margin-top:16px;">Invalid Writes</h2>
+        <div class="list">
+          ${run.invalidChanges.length ? run.invalidChanges.map(path => `<div class="mono">${path}</div>`).join('') : '<div>No invalid writes.</div>'}
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Prompt Excerpt</h2>
+      <div class="mono">${prompt ?? 'No prompt recorded.'}</div>
+    </section>
+
+    <section class="card">
+      <h2>Codex Output Excerpt</h2>
+      <div class="mono">${lastMessage ?? 'No codex last message recorded yet.'}</div>
+    </section>
+
+    <section class="card">
+      <h2>stderr Excerpt</h2>
+      <div class="mono">${stderr ?? run.error ?? 'No stderr or run error recorded.'}</div>
+    </section>
+  </main>
+</body>
+</html>`
+}
+
+function refreshRunDetailPages(projectName: string): void {
+  for (const run of listRunRecords(projectName)) {
+    const runDir = projectRunDir(projectName, run.runId)
+    writeFileSync(join(runDir, 'index.html'), generateRunDetailHtml(projectName, run), 'utf8')
+  }
 }
 
 async function runSentinelCodexMaintenance(
@@ -3120,6 +3330,62 @@ function loadActiveMainRunLock(
   }
 
   return lock
+}
+
+function inferCurrentResearchSummary(
+  projectName: string,
+  config: ProjectConfig,
+): CurrentResearchSummary {
+  const activeLock = loadActiveMainRunLock(projectName, config)
+  const runIds = existsSync(projectRunsDir(projectName))
+    ? readdirSync(projectRunsDir(projectName)).sort().reverse()
+    : []
+  const pendingRunId =
+    activeLock?.currentRunId ??
+    runIds.find(runId => !existsSync(join(projectRunDir(projectName, runId), 'result.json'))) ??
+    null
+
+  if (!activeLock && !pendingRunId) {
+    return {
+      active: false,
+      runId: null,
+      pid: null,
+      launchedBy: 'n/a',
+      startedAt: null,
+      heartbeatAt: null,
+      noteExcerpt: null,
+      promptExcerpt: null,
+      lastMessageExcerpt: null,
+    }
+  }
+
+  const runId = pendingRunId
+  const runDir = runId ? projectRunDir(projectName, runId) : null
+  const noteExcerpt = runDir
+    ? excerpt(
+        readTextFileIfExists(
+          join(runDir, 'candidate', config.workspace_dir, 'ITERATION_NOTES.md'),
+        ),
+      )
+    : null
+  const promptExcerpt = runDir
+    ? excerpt(readTextFileIfExists(join(runDir, 'prompt.md')))
+    : null
+  const lastMessageExcerpt = runDir
+    ? excerpt(readTextFileIfExists(join(runDir, 'codex-last-message.md')))
+    : null
+
+  return {
+    active: Boolean(activeLock),
+    runId,
+    pid: activeLock?.pid ?? null,
+    launchedBy: activeLock?.launchedBy ?? 'n/a',
+    startedAt: activeLock?.startedAt ?? null,
+    heartbeatAt: activeLock?.heartbeatAt ?? null,
+    noteExcerpt,
+    promptExcerpt,
+    lastMessageExcerpt,
+  }
 }
 
 function shellEscape(value: string): string {
@@ -3301,7 +3567,7 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
   }
 
   const now = new Date().toISOString()
-  const runLock: MainRunLock = {
+  let runLock: MainRunLock = {
     project: projectName,
     pid: process.pid,
     startedAt: existingLock?.startedAt ?? now,
@@ -3313,9 +3579,12 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
   }
   saveMainRunLock(projectName, runLock)
   const heartbeatTimer = setInterval(() => {
-    saveMainRunLock(projectName, {
+    runLock = {
       ...runLock,
       heartbeatAt: new Date().toISOString(),
+    }
+    saveMainRunLock(projectName, {
+      ...runLock,
     })
   }, 10_000)
   let shouldTriggerSentinelAfterRun = false
@@ -3343,6 +3612,12 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
       const runDir = join(runsRoot, runId)
       const candidateRoot = join(runDir, 'candidate')
       const outputPath = join(runDir, 'codex-last-message.md')
+      runLock = {
+        ...runLock,
+        currentRunId: runId,
+        heartbeatAt: new Date().toISOString(),
+      }
+      saveMainRunLock(projectName, runLock)
       ensureDir(runDir)
       cpSync(root, candidateRoot, { recursive: true })
 
@@ -3543,6 +3818,9 @@ async function runSentinelPass(
     const autoResumeDecision = shouldSentinelLaunchMainLoop(config, report)
     if (autoResumeDecision.launch) {
       const launched = launchMainLoopOnce(projectName, config)
+      evaluation = runEvaluation(projectDir(projectName), config).parsed
+      report = buildHealthReport(projectName, config, state, evaluation)
+      writeSentinelArtifacts(projectName, config, state, report)
       console.log(
         `Sentinel launched main research loop pid=${launched.pid} iterations=${launched.iterations} model=${launched.model ?? 'default'}`,
       )

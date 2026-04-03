@@ -1,6 +1,6 @@
 [
   {
-    "title": "Refresh sentinel artifacts",
-    "command": "bun run autoresearch sentinel memory-policy"
+    "title": "Review protected file drift",
+    "command": "git diff -- /private/tmp/elizantMEM-fix/research/autoresearch/projects/memory-policy"
   }
 ]
