@@ -1,6 +1,6 @@
 {
   "project": "memory-policy",
-  "generatedAt": "2026-04-03T05:45:35.889Z",
+  "generatedAt": "2026-04-03T05:58:53.759Z",
   "phase": {
     "current": "experiment_bootstrap",
     "reason": "The research design is saturated enough to begin implementing trace, ledger, replay, baseline, and metric scaffolds.",

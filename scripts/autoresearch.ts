@@ -1786,6 +1786,25 @@ function listRunRecords(projectName: string): RunRecord[] {
     .sort((left, right) => right.runId.localeCompare(left.runId))
 }
 
+function latestPendingRunId(projectName: string): string | null {
+  const runsDir = projectRunsDir(projectName)
+  if (!existsSync(runsDir)) return null
+
+  return readdirSync(runsDir)
+    .map(runId => {
+      const runDir = projectRunDir(projectName, runId)
+      const resultPath = join(runDir, 'result.json')
+      if (existsSync(resultPath)) return null
+      return {
+        runId,
+        mtimeMs: statSync(runDir).mtimeMs,
+      }
+    })
+    .filter((value): value is { runId: string; mtimeMs: number } => value !== null)
+    .sort((left, right) => right.mtimeMs - left.mtimeMs || right.runId.localeCompare(left.runId))[0]
+    ?.runId ?? null
+}
+
 function topChangedFiles(runs: RunRecord[]): Array<{ path: string; count: number }> {
   const counts = new Map<string, number>()
   for (const run of runs) {
@@ -3337,13 +3356,9 @@ function inferCurrentResearchSummary(
   config: ProjectConfig,
 ): CurrentResearchSummary {
   const activeLock = loadActiveMainRunLock(projectName, config)
-  const runIds = existsSync(projectRunsDir(projectName))
-    ? readdirSync(projectRunsDir(projectName)).sort().reverse()
-    : []
-  const pendingRunId =
-    activeLock?.currentRunId ??
-    runIds.find(runId => !existsSync(join(projectRunDir(projectName, runId), 'result.json'))) ??
-    null
+  const pendingRunId = activeLock
+    ? activeLock.currentRunId ?? null
+    : latestPendingRunId(projectName)
 
   if (!activeLock && !pendingRunId) {
     return {
@@ -3361,23 +3376,27 @@ function inferCurrentResearchSummary(
 
   const runId = pendingRunId
   const runDir = runId ? projectRunDir(projectName, runId) : null
+  const latestRunDir =
+    activeLock?.currentRunId
+      ? projectRunDir(projectName, activeLock.currentRunId)
+      : runDir
   const noteExcerpt = runDir
     ? excerpt(
         readTextFileIfExists(
-          join(runDir, 'candidate', config.workspace_dir, 'ITERATION_NOTES.md'),
+          join(latestRunDir!, 'candidate', config.workspace_dir, 'ITERATION_NOTES.md'),
         ),
       )
     : null
-  const promptExcerpt = runDir
-    ? excerpt(readTextFileIfExists(join(runDir, 'prompt.md')))
+  const promptExcerpt = latestRunDir
+    ? excerpt(readTextFileIfExists(join(latestRunDir, 'prompt.md')))
     : null
-  const lastMessageExcerpt = runDir
-    ? excerpt(readTextFileIfExists(join(runDir, 'codex-last-message.md')))
+  const lastMessageExcerpt = latestRunDir
+    ? excerpt(readTextFileIfExists(join(latestRunDir, 'codex-last-message.md')))
     : null
 
   return {
     active: Boolean(activeLock),
-    runId,
+    runId: activeLock?.currentRunId ?? runId,
     pid: activeLock?.pid ?? null,
     launchedBy: activeLock?.launchedBy ?? 'n/a',
     startedAt: activeLock?.startedAt ?? null,
