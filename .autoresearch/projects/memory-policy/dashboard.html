@@ -256,6 +256,44 @@
       color: #8a3a08;
       font-size: 0.92rem;
     }
+    .friction-terminal {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 18px;
+      background: #1f2937;
+      color: #f8fafc;
+      border: 1px solid rgba(15, 23, 42, 0.22);
+    }
+    .friction-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: "SFMono-Regular", Menlo, monospace;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+    }
+    .friction-line {
+      display: grid;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.06);
+      font-family: "SFMono-Regular", Menlo, monospace;
+      font-size: 0.85rem;
+    }
+    .friction-pill {
+      display: inline-block;
+      width: fit-content;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(251, 191, 36, 0.16);
+      color: #fde68a;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
     .success-note {
       padding: 10px 12px;
       border-radius: 14px;
@@ -287,6 +325,57 @@
       display: grid;
       gap: 10px;
     }
+    .trend-card {
+      display: grid;
+      gap: 12px;
+    }
+    .trend-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .trend-value {
+      font-size: 2rem;
+      line-height: 1;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .sparkline-shell {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid var(--line);
+    }
+    .sparkline {
+      width: 100%;
+      height: 84px;
+      display: block;
+    }
+    .sparkline-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .run-balance {
+      display: grid;
+      gap: 10px;
+    }
+    .stack-bar {
+      display: grid;
+      grid-template-columns: var(--accepted,1fr) var(--rejected,1fr) var(--failed,1fr);
+      gap: 6px;
+    }
+    .stack-segment {
+      height: 12px;
+      border-radius: 999px;
+      min-width: 12px;
+    }
+    .stack-segment.accepted { background: var(--good); }
+    .stack-segment.rejected { background: var(--warn); }
+    .stack-segment.failed { background: var(--bad); }
     .timeline-item {
       display: grid;
       grid-template-columns: 12px 1fr;
@@ -340,7 +429,7 @@
     </section>
     <section class="grid" id="app"></section>
   </main>
-  <script id="payload" type="application/json">{"project":"memory-policy","description":"Long-memory paper and experiment lane for Memory as Policy","state":{"project":"memory-policy","bestScore":13.25,"bestRunId":"20260403T023410609Z-0008","totalRuns":10,"acceptedRuns":["20260402T164922125Z-0001","20260403T021828615Z-0006","20260403T023410609Z-0008"],"rejectedRuns":["20260402T165137859Z-0002","20260403T013427289Z-0003","20260403T015519437Z-0004","20260403T015822028Z-0005","20260403T022919561Z-0007","20260403T025334228Z-0009","20260403T032011880Z-0010"],"createdAt":"2026-04-02T16:49:22.110Z","updatedAt":"2026-04-03T03:21:22.326Z","lastRun":{"runId":"20260403T032011880Z-0010","status":"rejected","dryRun":false,"score":11,"scoreDelta":-2.25,"baselineScore":13.25,"bestScoreAfterRun":13.25,"changedFiles":["implementation/replay/replay-harness.ts","workspace/ITERATION_NOTES.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":11,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":1,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T03:21:22.325Z"},"failedRuns":[]},"evaluation":{"score":9,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":0,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"report":{"project":"memory-policy","generatedAt":"2026-04-03T03:34:11.446Z","phase":{"current":"experiment_bootstrap","reason":"The research design is saturated enough to begin implementing trace, ledger, replay, baseline, and metric scaffolds.","evidence":["accepted_non_dry_runs=1","best_score=13.25","implementation_enabled=true"],"updatedAt":"2026-04-03T02:57:20.258Z"},"evaluation":{"score":9,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":0,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"summary":{"totalRuns":10,"acceptedRuns":3,"rejectedRuns":7,"failedRuns":0,"bestScore":13.25,"lastRunStatus":"rejected","lastPromotedRunId":"20260403T023410609Z-0008","lastPromotedAt":"2026-04-03T02:36:55.460Z","consecutiveRejectedRuns":2,"consecutiveNoChangeRuns":0},"protectedFiles":{"tracked":[{"path":"goal.md","digest":"81863d8a785d703acb78502aa2f339385b6d5ef1"},{"path":"program.md","digest":"830f31f101084eb4e7e73e38eb8e4fb1f8353761"},{"path":"project.json","digest":"1100fb9d9eefa7b7a151601329e625d463cd1891"}],"drift":[]},"versioning":{"gitStatusLines":["M scripts/autoresearch.ts"]},"recentRuns":[{"runId":"20260403T032011880Z-0010","status":"rejected","dryRun":false,"score":11,"scoreDelta":-2.25,"baselineScore":13.25,"bestScoreAfterRun":13.25,"changedFiles":["implementation/replay/replay-harness.ts","workspace/ITERATION_NOTES.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":11,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":1,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T03:21:22.325Z"},{"runId":"20260403T025334228Z-0009","status":"rejected","dryRun":false,"score":11,"scoreDelta":-2.25,"baselineScore":13.25,"bestScoreAfterRun":13.25,"changedFiles":["implementation/README.md","implementation/replay/replay-harness.ts","workspace/ITERATION_NOTES.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":11,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":1,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:55:10.397Z"},{"runId":"20260403T023410609Z-0008","status":"accepted","dryRun":false,"score":13.25,"scoreDelta":2.5,"baselineScore":10.75,"bestScoreAfterRun":13.25,"changedFiles":["workspace/ITERATION_NOTES.md","workspace/design/memory-loop.md","workspace/experiments/eval-matrix.md","workspace/experiments/plan.md","workspace/paper/abstract.md","workspace/results/readout.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":13.25,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"literature_review":1,"benchmark_map":1,"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"results_readout":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:36:55.460Z"},{"runId":"20260403T022919561Z-0007","status":"rejected","dryRun":false,"score":13.25,"scoreDelta":2.5,"baselineScore":10.75,"bestScoreAfterRun":10.75,"changedFiles":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json","workspace/ITERATION_NOTES.md","workspace/design/memory-loop.md","workspace/experiments/eval-matrix.md","workspace/experiments/plan.md"],"invalidChanges":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json"],"codexExitCode":0,"evaluation":{"score":13.25,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"literature_review":1,"benchmark_map":1,"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"results_readout":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:32:14.003Z"},{"runId":"20260403T021828615Z-0006","status":"accepted","dryRun":true,"score":10.75,"scoreDelta":0.75,"baselineScore":10,"bestScoreAfterRun":10.75,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10.75,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"results_readout":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:18:28.635Z"},{"runId":"20260403T015822028Z-0005","status":"rejected","dryRun":false,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json","project.json","workspace/ITERATION_NOTES.md","workspace/design/memory-loop.md","workspace/experiments/eval-matrix.md","workspace/experiments/plan.md","workspace/paper/abstract.md","workspace/paper/outline.md"],"invalidChanges":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json","project.json"],"codexExitCode":0,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:01:52.632Z"},{"runId":"20260403T015519437Z-0004","status":"rejected","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T01:55:19.459Z"},{"runId":"20260403T013427289Z-0003","status":"rejected","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T01:34:27.310Z"},{"runId":"20260402T165137859Z-0002","status":"rejected","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-02T16:51:37.878Z"},{"runId":"20260402T164922125Z-0001","status":"baseline","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-02T16:49:22.146Z"}],"topChangedFiles":[{"path":"workspace/ITERATION_NOTES.md","count":5},{"path":"workspace/design/memory-loop.md","count":3},{"path":"workspace/experiments/eval-matrix.md","count":3},{"path":"workspace/experiments/plan.md","count":3},{"path":".omx/logs/turns-2026-04-03.jsonl","count":2},{"path":".omx/metrics.json","count":2},{"path":".omx/state/hud-state.json","count":2},{"path":".omx/state/notify-hook-state.json","count":2},{"path":".omx/state/team-leader-nudge.json","count":2},{"path":".omx/state/tmux-hook-state.json","count":2}],"issues":[],"maintenanceQueue":[{"title":"Refresh sentinel artifacts","command":"bun run autoresearch sentinel memory-policy"}]}}</script>
+  <script id="payload" type="application/json">{"project":"memory-policy","description":"Long-memory paper and experiment lane for Memory as Policy","state":{"project":"memory-policy","bestScore":13.25,"bestRunId":"20260403T023410609Z-0008","totalRuns":10,"acceptedRuns":["20260402T164922125Z-0001","20260403T021828615Z-0006","20260403T023410609Z-0008"],"rejectedRuns":["20260402T165137859Z-0002","20260403T013427289Z-0003","20260403T015519437Z-0004","20260403T015822028Z-0005","20260403T022919561Z-0007","20260403T025334228Z-0009","20260403T032011880Z-0010"],"createdAt":"2026-04-02T16:49:22.110Z","updatedAt":"2026-04-03T03:21:22.326Z","lastRun":{"runId":"20260403T032011880Z-0010","status":"rejected","dryRun":false,"score":11,"scoreDelta":-2.25,"baselineScore":13.25,"bestScoreAfterRun":13.25,"changedFiles":["implementation/replay/replay-harness.ts","workspace/ITERATION_NOTES.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":11,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":1,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T03:21:22.325Z"},"failedRuns":[]},"evaluation":{"score":9,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":0,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"report":{"project":"memory-policy","generatedAt":"2026-04-03T03:42:34.720Z","phase":{"current":"experiment_bootstrap","reason":"The research design is saturated enough to begin implementing trace, ledger, replay, baseline, and metric scaffolds.","evidence":["accepted_non_dry_runs=1","best_score=13.25","implementation_enabled=true"],"updatedAt":"2026-04-03T02:57:20.258Z"},"evaluation":{"score":9,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":0,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"summary":{"totalRuns":10,"acceptedRuns":3,"rejectedRuns":7,"failedRuns":0,"bestScore":13.25,"lastRunStatus":"rejected","lastPromotedRunId":"20260403T023410609Z-0008","lastPromotedAt":"2026-04-03T02:36:55.460Z","consecutiveRejectedRuns":2,"consecutiveNoChangeRuns":0},"protectedFiles":{"tracked":[{"path":"goal.md","digest":"81863d8a785d703acb78502aa2f339385b6d5ef1"},{"path":"program.md","digest":"830f31f101084eb4e7e73e38eb8e4fb1f8353761"},{"path":"project.json","digest":"1100fb9d9eefa7b7a151601329e625d463cd1891"}],"drift":[]},"versioning":{"gitStatusLines":["M scripts/autoresearch.ts"]},"recentRuns":[{"runId":"20260403T032011880Z-0010","status":"rejected","dryRun":false,"score":11,"scoreDelta":-2.25,"baselineScore":13.25,"bestScoreAfterRun":13.25,"changedFiles":["implementation/replay/replay-harness.ts","workspace/ITERATION_NOTES.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":11,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":1,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T03:21:22.325Z"},{"runId":"20260403T025334228Z-0009","status":"rejected","dryRun":false,"score":11,"scoreDelta":-2.25,"baselineScore":13.25,"bestScoreAfterRun":13.25,"changedFiles":["implementation/README.md","implementation/replay/replay-harness.ts","workspace/ITERATION_NOTES.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":11,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"trace_schema":1,"ledger_schema":1,"replay_harness":1,"baseline_registry":1,"metric_engine":1,"implementation_readme":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:55:10.397Z"},{"runId":"20260403T023410609Z-0008","status":"accepted","dryRun":false,"score":13.25,"scoreDelta":2.5,"baselineScore":10.75,"bestScoreAfterRun":13.25,"changedFiles":["workspace/ITERATION_NOTES.md","workspace/design/memory-loop.md","workspace/experiments/eval-matrix.md","workspace/experiments/plan.md","workspace/paper/abstract.md","workspace/results/readout.md"],"invalidChanges":[],"codexExitCode":0,"evaluation":{"score":13.25,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"literature_review":1,"benchmark_map":1,"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"results_readout":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:36:55.460Z"},{"runId":"20260403T022919561Z-0007","status":"rejected","dryRun":false,"score":13.25,"scoreDelta":2.5,"baselineScore":10.75,"bestScoreAfterRun":10.75,"changedFiles":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json","workspace/ITERATION_NOTES.md","workspace/design/memory-loop.md","workspace/experiments/eval-matrix.md","workspace/experiments/plan.md"],"invalidChanges":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json"],"codexExitCode":0,"evaluation":{"score":13.25,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"literature_review":1,"benchmark_map":1,"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"results_readout":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:32:14.003Z"},{"runId":"20260403T021828615Z-0006","status":"accepted","dryRun":true,"score":10.75,"scoreDelta":0.75,"baselineScore":10,"bestScoreAfterRun":10.75,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10.75,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"results_readout":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:18:28.635Z"},{"runId":"20260403T015822028Z-0005","status":"rejected","dryRun":false,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json","project.json","workspace/ITERATION_NOTES.md","workspace/design/memory-loop.md","workspace/experiments/eval-matrix.md","workspace/experiments/plan.md","workspace/paper/abstract.md","workspace/paper/outline.md"],"invalidChanges":[".omx/logs/turns-2026-04-03.jsonl",".omx/metrics.json",".omx/state/hud-state.json",".omx/state/notify-hook-state.json",".omx/state/team-leader-nudge.json",".omx/state/tmux-hook-state.json","project.json"],"codexExitCode":0,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T02:01:52.632Z"},{"runId":"20260403T015519437Z-0004","status":"rejected","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T01:55:19.459Z"},{"runId":"20260403T013427289Z-0003","status":"rejected","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-03T01:34:27.310Z"},{"runId":"20260402T165137859Z-0002","status":"rejected","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-02T16:51:37.878Z"},{"runId":"20260402T164922125Z-0001","status":"baseline","dryRun":true,"score":10,"scoreDelta":0,"baselineScore":10,"bestScoreAfterRun":10,"changedFiles":[],"invalidChanges":[],"codexExitCode":null,"evaluation":{"score":10,"summary":"The workspace is coherent enough to hand off for implementation-oriented experimentation.","metrics":{"abstract_quality":1,"outline_structure":1,"architecture_coverage":1,"experiment_rigor":1,"evaluation_specificity":1,"iteration_notes":1},"recommendation":"Push deeper on implementation specificity or statistical evaluation details."},"createdAt":"2026-04-02T16:49:22.146Z"}],"topChangedFiles":[{"path":"workspace/ITERATION_NOTES.md","count":5},{"path":"workspace/design/memory-loop.md","count":3},{"path":"workspace/experiments/eval-matrix.md","count":3},{"path":"workspace/experiments/plan.md","count":3},{"path":".omx/logs/turns-2026-04-03.jsonl","count":2},{"path":".omx/metrics.json","count":2},{"path":".omx/state/hud-state.json","count":2},{"path":".omx/state/notify-hook-state.json","count":2},{"path":".omx/state/team-leader-nudge.json","count":2},{"path":".omx/state/tmux-hook-state.json","count":2}],"issues":[],"maintenanceQueue":[{"title":"Refresh sentinel artifacts","command":"bun run autoresearch sentinel memory-policy"}]}}</script>
   <script>
     const data = JSON.parse(document.getElementById('payload').textContent);
     const report = data.report;
@@ -371,14 +460,54 @@
     const failedCount = report?.summary?.failedRuns ?? data.state.failedRuns?.length ?? 0;
     const runMix = acceptedCount + rejectedCount + failedCount;
     const acceptRate = runMix > 0 ? Math.round((acceptedCount / runMix) * 100) : 0;
+    const recentScores = runs
+      .slice()
+      .reverse()
+      .map(run => Number(run.score))
+      .filter(value => Number.isFinite(value));
+    const buildSparkline = (values) => {
+      if (!values.length) return '';
+      const width = 420;
+      const height = 84;
+      const padding = 8;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const spread = max - min || 1;
+      const step = values.length > 1 ? (width - padding * 2) / (values.length - 1) : 0;
+      const points = values.map((value, index) => {
+        const x = padding + step * index;
+        const y = height - padding - ((value - min) / spread) * (height - padding * 2);
+        return [x, y];
+      });
+      const line = points.map(([x, y]) => x + ',' + y).join(' ');
+      const area = [padding + ',' + (height - padding)]
+        .concat(points.map(([x, y]) => x + ',' + y))
+        .concat((padding + step * (values.length - 1)) + ',' + (height - padding))
+        .join(' ');
+      const circles = points.map(([x, y], index) => {
+        const radius = index === points.length - 1 ? 4.5 : 3;
+        const fill = index === points.length - 1 ? 'var(--accent-2)' : 'var(--accent)';
+        return '<circle cx="' + x + '" cy="' + y + '" r="' + radius + '" fill="' + fill + '"></circle>';
+      }).join('');
+      return '<svg class="sparkline" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" role="img" aria-label="Recent run score trend">' +
+        '<defs><linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1">' +
+        '<stop offset="0%" stop-color="rgba(14,116,144,0.28)"></stop>' +
+        '<stop offset="100%" stop-color="rgba(14,116,144,0.02)"></stop>' +
+        '</linearGradient></defs>' +
+        '<polygon points="' + area + '" fill="url(#spark-fill)"></polygon>' +
+        '<polyline points="' + line + '" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
+        circles +
+        '</svg>';
+    };
+    const trendDelta = runs.length >= 2 ? Number(runs[0].score) - Number(runs[1].score) : 0;
 
     const heroHtml = `
       <section class="card hero-card span-12">
         <div class="hero-layout">
           <div class="hero-copy">
             <span class="eyebrow">Autonomous Research Cockpit</span>
-            <h1>${projectName}</h1>
-            <p>${config.description}</p>
+            <h1>${data.project}</h1>
+            <p>${data.description}</p>
             <div>
               <span class="phase-chip"><span class="phase-dot"></span>${titleize(phaseCurrent)}</span>
             </div>
@@ -451,12 +580,21 @@
         </div>
       </section>
       <section class="card span-4">
-        <h2>Blockers</h2>
-        <p class="section-lead">Metrics below full completion are what currently block phase completion or promotion.</p>
-        <div style="margin-top:12px;" class="blocker-list">
-          ${blockerMetrics.length ? blockerMetrics.map(([key, value]) => `
-            <div class="blocker"><strong>${titleize(key)}</strong><br/>score=${Number(value).toFixed(2)}</div>
-          `).join('') : '<div class="success-note">No blocker metrics. The active contract is fully satisfied.</div>'}
+        <h2>CURRENT_FRICTION</h2>
+        <p class="section-lead">What is blocking phase completion or promotion right now.</p>
+        <div style="margin-top:12px;">
+          ${blockerMetrics.length ? (
+            '<div class="friction-terminal">' +
+            '<div class="friction-head"><span>memory-policy://experiment_bootstrap</span><span>' + blockerMetrics.length + ' active blocker(s)</span></div>' +
+            blockerMetrics.map(([key, value], index) =>
+              '<div class="friction-line">' +
+              '<span class="friction-pill">drag ' + Math.round((1 - Number(value)) * 100) + '%</span>' +
+              '<strong>[' + (index + 1) + '] ' + titleize(key) + '</strong>' +
+              '<span>completion=' + Number(value).toFixed(2) + '</span>' +
+              '</div>'
+            ).join('') +
+            '</div>'
+          ) : '<div class="success-note">No blocker metrics. The active contract is fully satisfied.</div>'}
         </div>
       </section>
     `;
@@ -502,6 +640,37 @@
     `;
 
     const runsHtml = `
+      <section class="card span-4">
+        <div class="trend-card">
+          <div class="trend-head">
+            <div>
+              <h2>Run Trend</h2>
+              <p class="section-lead">Recent score direction across latest runs.</p>
+            </div>
+            <div class="trend-value">${fmt(runs[0]?.score ?? data.evaluation.score)}</div>
+          </div>
+          <div class="sparkline-shell">
+            ${recentScores.length ? buildSparkline(recentScores) : '<p class="subdued">No score history yet.</p>'}
+            <div class="sparkline-labels">
+              <span>oldest</span>
+              <span>latest</span>
+            </div>
+          </div>
+          <div class="run-balance">
+            <div class="stack-bar" style="--accepted:${Math.max(acceptedCount,1)}fr; --rejected:${Math.max(rejectedCount,1)}fr; --failed:${Math.max(failedCount,1)}fr;">
+              <span class="stack-segment accepted"></span>
+              <span class="stack-segment rejected"></span>
+              <span class="stack-segment failed"></span>
+            </div>
+            <div class="timeline-meta">
+              <span>accepted: ${acceptedCount}</span>
+              <span>rejected: ${rejectedCount}</span>
+              <span>failed: ${failedCount}</span>
+              <span>delta vs previous: ${trendDelta >= 0 ? '+' : ''}${trendDelta.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </section>
       <section class="card span-8">
         <h2>Run Timeline</h2>
         <p class="section-lead">Most recent iterations, ordered newest first.</p>
@@ -522,7 +691,7 @@
           `).join('') : '<p>No runs yet.</p>'}
         </div>
       </section>
-      <section class="card span-4">
+      <section class="card span-12">
         <h2>Active Surfaces</h2>
         <p class="section-lead">Files changing most often across recent runs.</p>
         <table class="table compact" style="margin-top:12px;">

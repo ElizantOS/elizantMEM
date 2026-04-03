@@ -2270,6 +2270,44 @@ function generateDashboardHtml(
       color: #8a3a08;
       font-size: 0.92rem;
     }
+    .friction-terminal {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 18px;
+      background: #1f2937;
+      color: #f8fafc;
+      border: 1px solid rgba(15, 23, 42, 0.22);
+    }
+    .friction-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: "SFMono-Regular", Menlo, monospace;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+    }
+    .friction-line {
+      display: grid;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.06);
+      font-family: "SFMono-Regular", Menlo, monospace;
+      font-size: 0.85rem;
+    }
+    .friction-pill {
+      display: inline-block;
+      width: fit-content;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(251, 191, 36, 0.16);
+      color: #fde68a;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
     .success-note {
       padding: 10px 12px;
       border-radius: 14px;
@@ -2301,6 +2339,57 @@ function generateDashboardHtml(
       display: grid;
       gap: 10px;
     }
+    .trend-card {
+      display: grid;
+      gap: 12px;
+    }
+    .trend-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .trend-value {
+      font-size: 2rem;
+      line-height: 1;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .sparkline-shell {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid var(--line);
+    }
+    .sparkline {
+      width: 100%;
+      height: 84px;
+      display: block;
+    }
+    .sparkline-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .run-balance {
+      display: grid;
+      gap: 10px;
+    }
+    .stack-bar {
+      display: grid;
+      grid-template-columns: var(--accepted,1fr) var(--rejected,1fr) var(--failed,1fr);
+      gap: 6px;
+    }
+    .stack-segment {
+      height: 12px;
+      border-radius: 999px;
+      min-width: 12px;
+    }
+    .stack-segment.accepted { background: var(--good); }
+    .stack-segment.rejected { background: var(--warn); }
+    .stack-segment.failed { background: var(--bad); }
     .timeline-item {
       display: grid;
       grid-template-columns: 12px 1fr;
@@ -2385,14 +2474,54 @@ function generateDashboardHtml(
     const failedCount = report?.summary?.failedRuns ?? data.state.failedRuns?.length ?? 0;
     const runMix = acceptedCount + rejectedCount + failedCount;
     const acceptRate = runMix > 0 ? Math.round((acceptedCount / runMix) * 100) : 0;
+    const recentScores = runs
+      .slice()
+      .reverse()
+      .map(run => Number(run.score))
+      .filter(value => Number.isFinite(value));
+    const buildSparkline = (values) => {
+      if (!values.length) return '';
+      const width = 420;
+      const height = 84;
+      const padding = 8;
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const spread = max - min || 1;
+      const step = values.length > 1 ? (width - padding * 2) / (values.length - 1) : 0;
+      const points = values.map((value, index) => {
+        const x = padding + step * index;
+        const y = height - padding - ((value - min) / spread) * (height - padding * 2);
+        return [x, y];
+      });
+      const line = points.map(([x, y]) => x + ',' + y).join(' ');
+      const area = [padding + ',' + (height - padding)]
+        .concat(points.map(([x, y]) => x + ',' + y))
+        .concat((padding + step * (values.length - 1)) + ',' + (height - padding))
+        .join(' ');
+      const circles = points.map(([x, y], index) => {
+        const radius = index === points.length - 1 ? 4.5 : 3;
+        const fill = index === points.length - 1 ? 'var(--accent-2)' : 'var(--accent)';
+        return '<circle cx="' + x + '" cy="' + y + '" r="' + radius + '" fill="' + fill + '"></circle>';
+      }).join('');
+      return '<svg class="sparkline" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" role="img" aria-label="Recent run score trend">' +
+        '<defs><linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1">' +
+        '<stop offset="0%" stop-color="rgba(14,116,144,0.28)"></stop>' +
+        '<stop offset="100%" stop-color="rgba(14,116,144,0.02)"></stop>' +
+        '</linearGradient></defs>' +
+        '<polygon points="' + area + '" fill="url(#spark-fill)"></polygon>' +
+        '<polyline points="' + line + '" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>' +
+        circles +
+        '</svg>';
+    };
+    const trendDelta = runs.length >= 2 ? Number(runs[0].score) - Number(runs[1].score) : 0;
 
     const heroHtml = \`
       <section class="card hero-card span-12">
         <div class="hero-layout">
           <div class="hero-copy">
             <span class="eyebrow">Autonomous Research Cockpit</span>
-            <h1>\${projectName}</h1>
-            <p>\${config.description}</p>
+            <h1>\${data.project}</h1>
+            <p>\${data.description}</p>
             <div>
               <span class="phase-chip"><span class="phase-dot"></span>\${titleize(phaseCurrent)}</span>
             </div>
@@ -2465,12 +2594,21 @@ function generateDashboardHtml(
         </div>
       </section>
       <section class="card span-4">
-        <h2>Blockers</h2>
-        <p class="section-lead">Metrics below full completion are what currently block phase completion or promotion.</p>
-        <div style="margin-top:12px;" class="blocker-list">
-          \${blockerMetrics.length ? blockerMetrics.map(([key, value]) => \`
-            <div class="blocker"><strong>\${titleize(key)}</strong><br/>score=\${Number(value).toFixed(2)}</div>
-          \`).join('') : '<div class="success-note">No blocker metrics. The active contract is fully satisfied.</div>'}
+        <h2>CURRENT_FRICTION</h2>
+        <p class="section-lead">What is blocking phase completion or promotion right now.</p>
+        <div style="margin-top:12px;">
+          \${blockerMetrics.length ? (
+            '<div class="friction-terminal">' +
+            '<div class="friction-head"><span>memory-policy://experiment_bootstrap</span><span>' + blockerMetrics.length + ' active blocker(s)</span></div>' +
+            blockerMetrics.map(([key, value], index) =>
+              '<div class="friction-line">' +
+              '<span class="friction-pill">drag ' + Math.round((1 - Number(value)) * 100) + '%</span>' +
+              '<strong>[' + (index + 1) + '] ' + titleize(key) + '</strong>' +
+              '<span>completion=' + Number(value).toFixed(2) + '</span>' +
+              '</div>'
+            ).join('') +
+            '</div>'
+          ) : '<div class="success-note">No blocker metrics. The active contract is fully satisfied.</div>'}
         </div>
       </section>
     \`;
@@ -2516,6 +2654,37 @@ function generateDashboardHtml(
     \`;
 
     const runsHtml = \`
+      <section class="card span-4">
+        <div class="trend-card">
+          <div class="trend-head">
+            <div>
+              <h2>Run Trend</h2>
+              <p class="section-lead">Recent score direction across latest runs.</p>
+            </div>
+            <div class="trend-value">\${fmt(runs[0]?.score ?? data.evaluation.score)}</div>
+          </div>
+          <div class="sparkline-shell">
+            \${recentScores.length ? buildSparkline(recentScores) : '<p class="subdued">No score history yet.</p>'}
+            <div class="sparkline-labels">
+              <span>oldest</span>
+              <span>latest</span>
+            </div>
+          </div>
+          <div class="run-balance">
+            <div class="stack-bar" style="--accepted:\${Math.max(acceptedCount,1)}fr; --rejected:\${Math.max(rejectedCount,1)}fr; --failed:\${Math.max(failedCount,1)}fr;">
+              <span class="stack-segment accepted"></span>
+              <span class="stack-segment rejected"></span>
+              <span class="stack-segment failed"></span>
+            </div>
+            <div class="timeline-meta">
+              <span>accepted: \${acceptedCount}</span>
+              <span>rejected: \${rejectedCount}</span>
+              <span>failed: \${failedCount}</span>
+              <span>delta vs previous: \${trendDelta >= 0 ? '+' : ''}\${trendDelta.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </section>
       <section class="card span-8">
         <h2>Run Timeline</h2>
         <p class="section-lead">Most recent iterations, ordered newest first.</p>
@@ -2536,7 +2705,7 @@ function generateDashboardHtml(
           \`).join('') : '<p>No runs yet.</p>'}
         </div>
       </section>
-      <section class="card span-4">
+      <section class="card span-12">
         <h2>Active Surfaces</h2>
         <p class="section-lead">Files changing most often across recent runs.</p>
         <table class="table compact" style="margin-top:12px;">
