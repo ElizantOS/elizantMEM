@@ -1,22 +1,22 @@
 # Sentinel Health Report
 
 Project: memory-policy
-Generated: 2026-04-03T02:57:20.277Z
+Generated: 2026-04-03T03:21:22.386Z
 Current evaluation score: 9
 Current evaluation summary: The workspace is coherent enough to hand off for implementation-oriented experimentation.
 Current sentinel phase: experiment_bootstrap
 
 ## Summary
 
-- total runs: 9
+- total runs: 10
 - accepted runs: 3
-- rejected runs: 6
+- rejected runs: 7
 - failed runs: 0
 - best score: 13.25
 - last run status: rejected
 - last promoted run: 20260403T023410609Z-0008
 - last promoted at: 2026-04-03T02:36:55.460Z
-- consecutive rejected runs: 1
+- consecutive rejected runs: 2
 - consecutive no-change runs: 0
 
 ## Protected Files
@@ -26,11 +26,7 @@ Current sentinel phase: experiment_bootstrap
 
 ## Versioning
 
-- M package.json
-- ?? research/autoresearch/README.md
-- ?? research/autoresearch/projects/memory-policy/
-- ?? research/autoresearch/templates/
-- ?? scripts/autoresearch.ts
+- M scripts/autoresearch.ts
 
 ## Issues
 
@@ -38,6 +34,7 @@ Current sentinel phase: experiment_bootstrap
 
 ## Recent Runs
 
+- 20260403T032011880Z-0010: rejected, score=11, delta=-2.25, changed=2
 - 20260403T025334228Z-0009: rejected, score=11, delta=-2.25, changed=3
 - 20260403T023410609Z-0008: accepted, score=13.25, delta=2.5, changed=6
 - 20260403T022919561Z-0007: rejected, score=13.25, delta=2.5, changed=10

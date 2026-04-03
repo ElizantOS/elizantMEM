@@ -1,0 +1,30 @@
+{
+  "runId": "20260403T032011880Z-0010",
+  "status": "rejected",
+  "dryRun": false,
+  "score": 11,
+  "scoreDelta": -2.25,
+  "baselineScore": 13.25,
+  "bestScoreAfterRun": 13.25,
+  "changedFiles": [
+    "implementation/replay/replay-harness.ts",
+    "workspace/ITERATION_NOTES.md"
+  ],
+  "invalidChanges": [],
+  "codexExitCode": 0,
+  "evaluation": {
+    "score": 11,
+    "summary": "The workspace is coherent enough to hand off for implementation-oriented experimentation.",
+    "metrics": {
+      "trace_schema": 1,
+      "ledger_schema": 1,
+      "replay_harness": 1,
+      "baseline_registry": 1,
+      "metric_engine": 1,
+      "implementation_readme": 1,
+      "iteration_notes": 1
+    },
+    "recommendation": "Push deeper on implementation specificity or statistical evaluation details."
+  },
+  "createdAt": "2026-04-03T03:21:22.325Z"
+}

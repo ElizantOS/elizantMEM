@@ -2,7 +2,7 @@
   "project": "memory-policy",
   "bestScore": 13.25,
   "bestRunId": "20260403T023410609Z-0008",
-  "totalRuns": 9,
+  "totalRuns": 10,
   "acceptedRuns": [
     "20260402T164922125Z-0001",
     "20260403T021828615Z-0006",
@@ -14,12 +14,13 @@
     "20260403T015519437Z-0004",
     "20260403T015822028Z-0005",
     "20260403T022919561Z-0007",
-    "20260403T025334228Z-0009"
+    "20260403T025334228Z-0009",
+    "20260403T032011880Z-0010"
   ],
   "createdAt": "2026-04-02T16:49:22.110Z",
-  "updatedAt": "2026-04-03T02:55:10.398Z",
+  "updatedAt": "2026-04-03T03:21:22.326Z",
   "lastRun": {
-    "runId": "20260403T025334228Z-0009",
+    "runId": "20260403T032011880Z-0010",
     "status": "rejected",
     "dryRun": false,
     "score": 11,
@@ -27,7 +28,6 @@
     "baselineScore": 13.25,
     "bestScoreAfterRun": 13.25,
     "changedFiles": [
-      "implementation/README.md",
       "implementation/replay/replay-harness.ts",
       "workspace/ITERATION_NOTES.md"
     ],
@@ -47,7 +47,7 @@
       },
       "recommendation": "Push deeper on implementation specificity or statistical evaluation details."
     },
-    "createdAt": "2026-04-03T02:55:10.397Z"
+    "createdAt": "2026-04-03T03:21:22.325Z"
   },
   "failedRuns": []
 }

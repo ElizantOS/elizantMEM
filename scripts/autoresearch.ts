@@ -1354,6 +1354,14 @@ function copyPathsIntoRoot(
     if (!existsSync(sourcePath)) continue
 
     const targetPath = join(targetRoot, relativePath)
+    const sourceResolved = resolve(sourcePath)
+    const targetResolved = resolve(targetPath)
+    if (
+      targetResolved === sourceResolved ||
+      targetResolved.startsWith(`${sourceResolved}/`)
+    ) {
+      continue
+    }
     ensureDir(dirname(targetPath))
     cpSync(sourcePath, targetPath, { recursive: true })
   }
