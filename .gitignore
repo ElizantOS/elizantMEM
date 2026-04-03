@@ -1,6 +1,4 @@
 .autoresearch/
 .omx/
 node_modules/
-dist/
-cli
 *.log
