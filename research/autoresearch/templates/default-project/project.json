@@ -27,6 +27,7 @@
     "supervise_main_loop": true,
     "main_loop_iterations_per_launch": 1,
     "main_loop_idle_threshold_minutes": 5,
+    "auto_resume_backoff_minutes": 3,
     "allowed_edit_roots": [
       "scripts/autoresearch.ts",
       "research/autoresearch/README.md",

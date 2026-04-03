@@ -18,7 +18,7 @@
     "20260403T032011880Z-0010"
   ],
   "createdAt": "2026-04-02T16:49:22.110Z",
-  "updatedAt": "2026-04-03T03:21:22.326Z",
+  "updatedAt": "2026-04-03T07:01:07.929Z",
   "lastRun": {
     "runId": "20260403T032011880Z-0010",
     "status": "rejected",
@@ -49,5 +49,11 @@
     },
     "createdAt": "2026-04-03T03:21:22.325Z"
   },
-  "failedRuns": []
+  "failedRuns": [],
+  "bestScoreByPhase": {
+    "experiment_bootstrap": 9
+  },
+  "bestRunIdByPhase": {
+    "experiment_bootstrap": null
+  }
 }

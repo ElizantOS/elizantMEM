@@ -55,6 +55,7 @@ type ProjectConfig = {
     main_loop_iterations_per_launch?: number
     main_loop_idle_threshold_minutes?: number
     main_loop_model?: string
+    auto_resume_backoff_minutes?: number
   }
 }
 
@@ -74,11 +75,15 @@ type EvaluationResult = {
 type RunRecord = {
   runId: string
   status: 'accepted' | 'rejected' | 'baseline' | 'failed'
+  phase?: SentinelPhase
   dryRun: boolean
   score: number
   scoreDelta: number
   baselineScore: number
+  phaseBaselineScore?: number
   bestScoreAfterRun: number
+  acceptedAgainstPhaseBaseline?: boolean
+  rejectionReasonCode?: string
   changedFiles: string[]
   invalidChanges: string[]
   codexExitCode: number | null
@@ -92,6 +97,8 @@ type ProjectState = {
   project: string
   bestScore: number | null
   bestRunId: string | null
+  bestScoreByPhase?: Record<string, number | null>
+  bestRunIdByPhase?: Record<string, string | null>
   totalRuns: number
   acceptedRuns: string[]
   rejectedRuns: string[]
@@ -123,6 +130,7 @@ type HealthReport = {
   generatedAt: string
   phase: PhaseState
   currentResearch: CurrentResearchSummary
+  planning: PlanningState
   evaluation: EvaluationResult
   summary: {
     totalRuns: number
@@ -130,6 +138,8 @@ type HealthReport = {
     rejectedRuns: number
     failedRuns: number
     bestScore: number | null
+    phaseBestScore: number | null
+    phaseBestRunId: string | null
     lastRunStatus: RunRecord['status'] | 'n/a'
     lastPromotedRunId: string | null
     lastPromotedAt: string | null
@@ -180,6 +190,26 @@ type MainRunLock = {
   dryRun: boolean
   model?: string
   currentRunId?: string
+}
+
+type SentinelLock = {
+  project: string
+  pid: number
+  startedAt: string
+  heartbeatAt: string
+  mode: 'loop' | 'pass'
+}
+
+type PlanningState = {
+  active: boolean
+  phase: SentinelPhase
+  reason: string
+  triggerIssueIds: string[]
+  summary: string
+  nextActions: string[]
+  recommendedContractChanges: string[]
+  recommendedLoopPolicy: 'normal' | 'backoff' | 'pause'
+  updatedAt: string
 }
 
 type CurrentResearchSummary = {
@@ -308,12 +338,24 @@ function projectRunLockPath(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'run-lock.json')
 }
 
+function projectSentinelLoopLockPath(projectName: string): string {
+  return join(projectRuntimeDir(projectName), 'sentinel-loop-lock.json')
+}
+
+function projectSentinelPassLockPath(projectName: string): string {
+  return join(projectRuntimeDir(projectName), 'sentinel-pass-lock.json')
+}
+
 function projectHealthPath(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'health.json')
 }
 
 function projectPhasePath(projectName: string): string {
   return join(projectRuntimeDir(projectName), 'phase.json')
+}
+
+function projectPlanningPath(projectName: string): string {
+  return join(projectRuntimeDir(projectName), 'planning.json')
 }
 
 function projectDashboardPath(projectName: string): string {
@@ -349,6 +391,8 @@ function loadProjectState(projectName: string): ProjectState {
   if (existsSync(statePath)) {
     const state = readJsonFile<ProjectState>(statePath)
     state.failedRuns ??= []
+    state.bestScoreByPhase ??= {}
+    state.bestRunIdByPhase ??= {}
     return state
   }
 
@@ -357,6 +401,8 @@ function loadProjectState(projectName: string): ProjectState {
     project: projectName,
     bestScore: null,
     bestRunId: null,
+    bestScoreByPhase: {},
+    bestRunIdByPhase: {},
     totalRuns: 0,
     acceptedRuns: [],
     rejectedRuns: [],
@@ -389,18 +435,125 @@ function savePhaseState(projectName: string, phase: PhaseState): void {
   writeJsonFile(projectPhasePath(projectName), phase)
 }
 
+function loadPlanningState(projectName: string): PlanningState {
+  const planningPath = projectPlanningPath(projectName)
+  if (existsSync(planningPath)) {
+    return readJsonFile<PlanningState>(planningPath)
+  }
+
+  return {
+    active: false,
+    phase: 'literature_grounding',
+    reason: 'No active sentinel planning state.',
+    triggerIssueIds: [],
+    summary: 'No active planning intervention.',
+    nextActions: [],
+    recommendedContractChanges: [],
+    recommendedLoopPolicy: 'normal',
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function savePlanningState(projectName: string, planning: PlanningState): void {
+  writeJsonFile(projectPlanningPath(projectName), planning)
+}
+
+function readLockFile<T>(path: string): T | null {
+  if (!existsSync(path)) return null
+  try {
+    return readJsonFile<T>(path)
+  } catch {
+    return null
+  }
+}
+
+function lockIsStale(
+  pid: number,
+  heartbeatAt: string,
+  staleMs: number,
+): boolean {
+  const heartbeatMs = Date.parse(heartbeatAt)
+  return (
+    !Number.isFinite(heartbeatMs) ||
+    Date.now() - heartbeatMs > staleMs ||
+    !processExists(pid)
+  )
+}
+
+function acquireJsonLock<T extends { pid: number; heartbeatAt: string }>(
+  path: string,
+  payload: T,
+  staleMs: number,
+): T {
+  ensureDir(dirname(path))
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const fd = openSync(path, 'wx')
+      try {
+        writeFileSync(fd, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+      } finally {
+        closeSync(fd)
+      }
+      return payload
+    } catch (error) {
+      const message = String(error)
+      if (!message.includes('EEXIST')) {
+        throw error
+      }
+      const existing = readLockFile<T>(path)
+      if (
+        existing &&
+        (existing.pid === payload.pid || lockIsStale(existing.pid, existing.heartbeatAt, staleMs))
+      ) {
+        rmSync(path, { force: true })
+        continue
+      }
+      throw new Error(`Active lock already exists at ${path}`)
+    }
+  }
+
+  throw new Error(`Unable to acquire lock at ${path}`)
+}
+
+function refreshJsonLock<T extends { pid: number }>(
+  path: string,
+  payload: T,
+): void {
+  const existing = readLockFile<T>(path)
+  if (existing && existing.pid !== payload.pid) {
+    throw new Error(`Cannot refresh lock at ${path}; owned by pid ${existing.pid}`)
+  }
+  writeJsonFile(path, payload)
+}
+
+function releaseJsonLock(
+  path: string,
+  pid: number,
+): void {
+  const existing = readLockFile<{ pid: number }>(path)
+  if (!existing || existing.pid === pid) {
+    rmSync(path, { force: true })
+  }
+}
+
 function loadMainRunLock(projectName: string): MainRunLock | null {
-  const lockPath = projectRunLockPath(projectName)
-  if (!existsSync(lockPath)) return null
-  return readJsonFile<MainRunLock>(lockPath)
+  return readLockFile<MainRunLock>(projectRunLockPath(projectName))
 }
 
 function saveMainRunLock(projectName: string, lock: MainRunLock): void {
-  writeJsonFile(projectRunLockPath(projectName), lock)
+  refreshJsonLock(projectRunLockPath(projectName), lock)
 }
 
 function clearMainRunLock(projectName: string): void {
-  rmSync(projectRunLockPath(projectName), { force: true })
+  releaseJsonLock(projectRunLockPath(projectName), process.pid)
+}
+
+function loadSentinelLoopLock(projectName: string): SentinelLock | null {
+  return readLockFile<SentinelLock>(projectSentinelLoopLockPath(projectName))
+}
+
+function loadSentinelPassLock(projectName: string): SentinelLock | null {
+  return readLockFile<SentinelLock>(projectSentinelPassLockPath(projectName))
 }
 
 function readTextFileIfExists(path: string): string | null {
@@ -422,6 +575,36 @@ function processExists(pid: number): boolean {
   } catch {
     return false
   }
+}
+
+function listProjectMainRunProcessIds(projectName: string): number[] {
+  const proc = Bun.spawnSync({
+    cmd: ['ps', '-Ao', 'pid=,command='],
+    cwd: repoRoot,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  if (proc.exitCode !== 0) return []
+
+  const output = new TextDecoder().decode(proc.stdout)
+  return output
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const match = line.match(/^(\d+)\s+(.*)$/)
+      if (!match) return null
+      const pid = Number(match[1])
+      const command = match[2] ?? ''
+      if (
+        !command.includes(`scripts/autoresearch.ts run ${projectName}`) &&
+        !command.includes(`autoresearch run ${projectName}`)
+      ) {
+        return null
+      }
+      return pid
+    })
+    .filter((pid): pid is number => Number.isInteger(pid) && pid > 0)
 }
 
 function listProjectNames(): string[] {
@@ -989,6 +1172,57 @@ function getIgnoredDiffRoots(config: ProjectConfig): string[] {
 
 function acceptedNonDryRuns(runs: RunRecord[]): RunRecord[] {
   return runs.filter(run => run.status === 'accepted' && !run.dryRun)
+}
+
+function phaseBestScore(
+  state: ProjectState,
+  phase: SentinelPhase,
+): number | null {
+  return state.bestScoreByPhase?.[phase] ?? null
+}
+
+function phaseBestRunId(
+  state: ProjectState,
+  phase: SentinelPhase,
+): string | null {
+  return state.bestRunIdByPhase?.[phase] ?? null
+}
+
+function ensurePhaseBaseline(
+  projectName: string,
+  state: ProjectState,
+  phase: SentinelPhase,
+  evaluationScore: number,
+): void {
+  state.bestScoreByPhase ??= {}
+  state.bestRunIdByPhase ??= {}
+  if (state.bestScoreByPhase[phase] === undefined) {
+    state.bestScoreByPhase[phase] = evaluationScore
+    state.bestRunIdByPhase[phase] = null
+    saveProjectState(projectName, state)
+  }
+}
+
+function stableChangedPattern(run: RunRecord): string {
+  return [...run.changedFiles]
+    .filter(path => path !== 'workspace/ITERATION_NOTES.md')
+    .sort()
+    .join('|')
+}
+
+function countLeadingSameScore(
+  runs: RunRecord[],
+  epsilon = 0.001,
+): number {
+  if (runs.length === 0) return 0
+  const first = runs[0]!.score
+  return countLeadingRuns(runs, run => Math.abs(run.score - first) <= epsilon)
+}
+
+function countLeadingSameChangePattern(runs: RunRecord[]): number {
+  if (runs.length === 0) return 0
+  const first = stableChangedPattern(runs[0]!)
+  return countLeadingRuns(runs, run => stableChangedPattern(run) === first)
 }
 
 function projectFileText(projectName: string, relativePath: string): string {
@@ -1839,6 +2073,7 @@ function detectHealthIssues(
   drift: string[],
 ): HealthIssue[] {
   const issues: HealthIssue[] = []
+  const phase = loadPhaseState(projectName)
   const workspaceRoot = join(projectDir(projectName), config.workspace_dir)
   const iterationNotesPath = join(workspaceRoot, 'ITERATION_NOTES.md')
   const derivedGoalPath = config.derived_goal_file
@@ -1850,6 +2085,7 @@ function detectHealthIssues(
   const stagnationThreshold = config.sentinel?.stagnation_threshold ?? 3
   const recentRuns = runs.slice(0, stagnationThreshold)
   const hasRecentAcceptance = recentRuns.some(run => run.status === 'accepted')
+  const recentRejectedRuns = recentRuns.filter(run => run.status === 'rejected')
   const noChangeStreak = countLeadingRuns(
     runs,
     run => run.changedFiles.length === 0 && run.invalidChanges.length === 0,
@@ -1861,6 +2097,10 @@ function detectHealthIssues(
       run.changedFiles.length === 0 &&
       run.invalidChanges.length === 0,
   )
+  const sameScoreStreak = countLeadingSameScore(recentRejectedRuns)
+  const samePatternStreak = countLeadingSameChangePattern(recentRejectedRuns)
+  const mainRunPids = listProjectMainRunProcessIds(projectName)
+  const currentPhaseBest = phaseBestScore(state, phase.current)
 
   if (!existsSync(iterationNotesPath)) {
     issues.push({
@@ -1903,6 +2143,48 @@ function detectHealthIssues(
       summary: `No accepted run in the latest ${stagnationThreshold} iterations.`,
       suggestedAction:
         'Inspect the prompt, evaluator, and workspace plan. The loop may be stalled or optimizing the wrong surface.',
+    })
+  }
+
+  if (
+    recentRejectedRuns.length >= stagnationThreshold &&
+    sameScoreStreak >= stagnationThreshold &&
+    samePatternStreak >= stagnationThreshold
+  ) {
+    issues.push({
+      id: 'rejected-plateau',
+      severity: 'critical',
+      summary:
+        `Recent rejected runs are repeating the same score and change pattern (${sameScoreStreak} score matches, ${samePatternStreak} pattern matches).`,
+      suggestedAction:
+        'Switch sentinel into planning mode and stop treating this as normal iteration progress.',
+    })
+  }
+
+  if (
+    state.bestScore !== null &&
+    currentPhaseBest !== null &&
+    state.bestScore > currentPhaseBest &&
+    recentRejectedRuns.length >= stagnationThreshold &&
+    sameScoreStreak >= stagnationThreshold
+  ) {
+    issues.push({
+      id: 'phase-baseline-mismatch',
+      severity: 'critical',
+      summary:
+        `Current phase best (${currentPhaseBest}) is below global best (${state.bestScore}), so this phase may be blocked by an outdated acceptance baseline.`,
+      suggestedAction:
+        'Reset or segment the acceptance baseline by phase before allowing more autonomous retries.',
+    })
+  }
+
+  if (mainRunPids.length > 1) {
+    issues.push({
+      id: 'duplicate-main-loop-workers',
+      severity: 'critical',
+      summary: `Detected multiple concurrent main research workers for ${projectName}: ${mainRunPids.join(', ')}`,
+      suggestedAction:
+        'Stop duplicate workers and restore a single supervised main loop before trusting further run outcomes.',
     })
   }
 
@@ -1988,6 +2270,24 @@ function buildMaintenanceQueue(
         queue.push({
           title: 'Inspect the latest health report and dashboard',
           command: `bun run autoresearch dashboard ${projectName}`,
+        })
+        break
+      case 'rejected-plateau':
+        queue.push({
+          title: 'Review plateau planning summary',
+          command: `bun run autoresearch sentinel ${projectName} --refresh-protected`,
+        })
+        break
+      case 'phase-baseline-mismatch':
+        queue.push({
+          title: 'Reset phase baseline before more runs',
+          command: `bun run autoresearch sentinel ${projectName} --refresh-protected`,
+        })
+        break
+      case 'duplicate-main-loop-workers':
+        queue.push({
+          title: 'Inspect duplicate research workers',
+          command: `bun run autoresearch status ${projectName}`,
         })
         break
       case 'dry-run-noop-loop':
@@ -2607,6 +2907,7 @@ function generateDashboardHtml(
     const phaseCurrent = report?.phase?.current ?? 'n/a';
     const phaseReason = report?.phase?.reason ?? 'No phase reason recorded.';
     const currentResearch = report?.currentResearch ?? null;
+    const planning = report?.planning ?? null;
     const completedMetrics = metrics.filter(([, value]) => Number(value) >= 1).length;
     const readinessPercent = metrics.length ? Math.round((completedMetrics / metrics.length) * 100) : 0;
     const blockerMetrics = metrics
@@ -2786,23 +3087,32 @@ function generateDashboardHtml(
         <p class="section-lead">\${data.evaluation.summary}</p>
         <p class="section-lead">Recommendation: \${data.evaluation.recommendation ?? 'n/a'}</p>
         <div style="margin-top:14px;">
-          <span class="chip">phase: \${titleize(phaseCurrent)}</span>
-          <span class="chip">protected goals tracked</span>
-          <span class="chip">event-triggered sentinel enabled</span>
-        </div>
-      </section>
-      <section class="card span-6">
-        <h2>Health & Decisions</h2>
-        <div style="margin-top:12px;">
-          \${issues.length ? issues.map(issue => \`
-            <div class="issue \${issue.severity}">
-              <strong>\${issue.summary}</strong>
-              <p style="margin-top:6px;">\${issue.suggestedAction}</p>
+              <span class="chip">phase: \${titleize(phaseCurrent)}</span>
+              <span class="chip">phase best: \${fmt(report?.summary?.phaseBestScore)}</span>
+              <span class="chip">protected goals tracked</span>
+              <span class="chip">event-triggered sentinel enabled</span>
             </div>
-          \`).join('') : '<div class="success-note">No active health issues. The current blocker is experiment completeness, not system instability.</div>'}
-        </div>
-      </section>
-    \`;
+          </section>
+          <section class="card span-6">
+        <h2>Health & Decisions</h2>
+            <div style="margin-top:12px;">
+              \${issues.length ? issues.map(issue => \`
+                <div class="issue \${issue.severity}">
+                  <strong>\${issue.summary}</strong>
+                  <p style="margin-top:6px;">\${issue.suggestedAction}</p>
+                </div>
+              \`).join('') : '<div class="success-note">No active health issues. The current blocker is experiment completeness, not system instability.</div>'}
+            </div>
+            \${planning?.active ? \`
+              <div class="issue info" style="margin-top:12px;">
+                <strong>Sentinel plan</strong>
+                <p style="margin-top:6px;">\${planning.summary}</p>
+                <p style="margin-top:6px;">Next: \${planning.nextActions?.[0] ?? 'n/a'}</p>
+                <p style="margin-top:6px;">Loop policy: \${planning.recommendedLoopPolicy}</p>
+              </div>
+            \` : ''}
+          </section>
+        \`;
 
     const runsHtml = \`
       <section class="card span-4">
@@ -2831,6 +3141,7 @@ function generateDashboardHtml(
               <span>accepted: \${acceptedCount}</span>
               <span>rejected: \${rejectedCount}</span>
               <span>failed: \${failedCount}</span>
+              <span>phase best: \${fmt(report?.summary?.phaseBestScore)}</span>
               <span>delta vs previous: \${trendDelta >= 0 ? '+' : ''}\${trendDelta.toFixed(2)}</span>
             </div>
           </div>
@@ -2849,6 +3160,7 @@ function generateDashboardHtml(
               <span>source: \${currentResearch?.launchedBy ?? 'n/a'}</span>
             </div>
             \${currentResearch?.runId ? '<a class="back" href="runs/' + currentResearch.runId + '/index.html">Open active run →</a>' : ''}
+            \${planning?.active ? '<div class="timeline-meta"><span>planning: active</span><span>reason: ' + planning.reason + '</span></div>' : ''}
           </div>
         </div>
       </section>
@@ -2980,6 +3292,7 @@ function buildHealthReport(
   config: ProjectConfig,
   state: ProjectState,
   evaluation: EvaluationResult,
+  planningOverride?: PlanningState,
 ): HealthReport {
   const phase = loadPhaseState(projectName)
   const currentProtected = collectProtectedDigests(projectName, config)
@@ -2994,6 +3307,7 @@ function buildHealthReport(
     generatedAt: new Date().toISOString(),
     phase,
     currentResearch: inferCurrentResearchSummary(projectName, config),
+    planning: planningOverride ?? loadPlanningState(projectName),
     evaluation,
     summary: {
       totalRuns: state.totalRuns,
@@ -3001,6 +3315,8 @@ function buildHealthReport(
       rejectedRuns: state.rejectedRuns.length,
       failedRuns: state.failedRuns.length,
       bestScore: state.bestScore,
+      phaseBestScore: phaseBestScore(state, phase.current),
+      phaseBestRunId: phaseBestRunId(state, phase.current),
       lastRunStatus: state.lastRun?.status ?? 'n/a',
       lastPromotedRunId: lastPromotedRun?.runId ?? null,
       lastPromotedAt: lastPromotedRun?.createdAt ?? null,
@@ -3048,6 +3364,125 @@ function maybeRefreshProtectedManifest(
       collectProtectedDigests(projectName, config),
     )
   }
+}
+
+function buildPlanningState(
+  projectName: string,
+  phase: PhaseState,
+  report: HealthReport,
+): PlanningState {
+  const issueIds = report.issues.map(issue => issue.id)
+  const active =
+    issueIds.includes('rejected-plateau') ||
+    issueIds.includes('phase-baseline-mismatch') ||
+    issueIds.includes('duplicate-main-loop-workers')
+
+  if (!active) {
+    return {
+      active: false,
+      phase: phase.current,
+      reason: 'No active planning intervention.',
+      triggerIssueIds: [],
+      summary: 'Sentinel does not currently require a planning intervention.',
+      nextActions: [],
+      recommendedContractChanges: [],
+      recommendedLoopPolicy: 'normal',
+      updatedAt: new Date().toISOString(),
+    }
+  }
+
+  const nextActions: string[] = []
+  const recommendedContractChanges: string[] = []
+  let recommendedLoopPolicy: PlanningState['recommendedLoopPolicy'] = 'backoff'
+  let reason = 'Sentinel detected structural stagnation.'
+  let summary =
+    'Recent runs are not advancing the project; sentinel should adjust control logic before continuing high-frequency retries.'
+
+  if (issueIds.includes('phase-baseline-mismatch')) {
+    reason = 'Current phase is blocked by an outdated acceptance baseline.'
+    summary =
+      'The current phase is still being judged against a stronger score from an earlier phase, so new work cannot be accepted even when it satisfies the active contract.'
+    nextActions.push(
+      'Reset or segment the acceptance baseline so experiment_bootstrap competes against its own phase best.',
+    )
+    recommendedContractChanges.push(
+      'Persist bestScoreByPhase and accept runs against the current phase baseline instead of the global best.',
+    )
+  }
+
+  if (issueIds.includes('rejected-plateau')) {
+    nextActions.push(
+      'Treat repeated rejected runs with the same score and same changed files as a plateau, not as healthy autonomous progress.',
+    )
+    nextActions.push(
+      'Prioritize a minimal replay-harness execution path or widen the contract, rather than retrying the same scaffold edits.',
+    )
+    recommendedContractChanges.push(
+      'Add plateau detection to health and display the sentinel plan summary in the dashboard.',
+    )
+  }
+
+  if (issueIds.includes('duplicate-main-loop-workers')) {
+    recommendedLoopPolicy = 'pause'
+    nextActions.push(
+      'Collapse duplicate main research workers back to a single supervised worker before trusting run outcomes.',
+    )
+    recommendedContractChanges.push(
+      'Use process-level duplicate detection in addition to the run lock.',
+    )
+  }
+
+  return {
+    active: true,
+    phase: phase.current,
+    reason,
+    triggerIssueIds: issueIds.filter(id =>
+      ['rejected-plateau', 'phase-baseline-mismatch', 'duplicate-main-loop-workers'].includes(
+        id,
+      ),
+    ),
+    summary,
+    nextActions,
+    recommendedContractChanges,
+    recommendedLoopPolicy,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function writePlanningArtifacts(
+  projectName: string,
+  planning: PlanningState,
+): void {
+  savePlanningState(projectName, planning)
+  const projectRoot = projectDir(projectName)
+  const path = join(projectRoot, 'control', 'progress-plan.md')
+  const content = `# Sentinel Progress Plan
+
+Active: ${planning.active ? 'yes' : 'no'}
+Phase: ${planning.phase}
+Updated: ${planning.updatedAt}
+
+## Reason
+
+${planning.reason}
+
+## Summary
+
+${planning.summary}
+
+## Next Actions
+
+${planning.nextActions.length ? planning.nextActions.map(item => `- ${item}`).join('\n') : '- none'}
+
+## Recommended Contract Changes
+
+${planning.recommendedContractChanges.length ? planning.recommendedContractChanges.map(item => `- ${item}`).join('\n') : '- none'}
+
+## Recommended Loop Policy
+
+- ${planning.recommendedLoopPolicy}
+`
+  writeTextFile(path, content)
 }
 
 function writeSentinelArtifacts(
@@ -3331,6 +3766,10 @@ function mainLoopIterationsPerLaunch(config: ProjectConfig): number {
   return config.sentinel?.main_loop_iterations_per_launch ?? 1
 }
 
+function autoResumeBackoffMs(config: ProjectConfig): number {
+  return (config.sentinel?.auto_resume_backoff_minutes ?? 3) * 60_000
+}
+
 function loadActiveMainRunLock(
   projectName: string,
   config: ProjectConfig,
@@ -3349,6 +3788,22 @@ function loadActiveMainRunLock(
   }
 
   return lock
+}
+
+function acquireMainRunLock(
+  projectName: string,
+  lock: MainRunLock,
+  config: ProjectConfig,
+): MainRunLock {
+  return acquireJsonLock(projectRunLockPath(projectName), lock, mainLoopIdleThresholdMs(config))
+}
+
+function acquireSentinelLock(
+  path: string,
+  lock: SentinelLock,
+  staleMs: number,
+): SentinelLock {
+  return acquireJsonLock(path, lock, staleMs)
 }
 
 function inferCurrentResearchSummary(
@@ -3413,6 +3868,7 @@ function shellEscape(value: string): string {
 
 function shouldSentinelLaunchMainLoop(
   config: ProjectConfig,
+  state: ProjectState,
   report: HealthReport,
 ): { launch: boolean; reason: string } {
   if (!(config.sentinel?.supervise_main_loop ?? true)) {
@@ -3443,6 +3899,14 @@ function shouldSentinelLaunchMainLoop(
     }
   }
 
+  const mainRunPids = listProjectMainRunProcessIds(report.project)
+  if (mainRunPids.length > 0) {
+    return {
+      launch: false,
+      reason: `Detected existing main-loop worker processes (${mainRunPids.join(', ')}) without relying only on the run lock.`,
+    }
+  }
+
   if (report.summary.failedRuns > 0) {
     const recentRuns = report.recentRuns.slice(0, 2)
     const allFailed =
@@ -3451,6 +3915,28 @@ function shouldSentinelLaunchMainLoop(
       return {
         launch: false,
         reason: 'Recent runs are repeatedly failing; sentinel will not auto-restart until a human reviews the lane.',
+      }
+    }
+  }
+
+  if (report.planning.active) {
+    if (report.planning.recommendedLoopPolicy === 'pause') {
+      return {
+        launch: false,
+        reason: 'Planning mode requested a pause in auto-resume.',
+      }
+    }
+
+    if (
+      report.planning.recommendedLoopPolicy === 'backoff' &&
+      state.lastRun?.createdAt
+    ) {
+      const lastRunMs = Date.parse(state.lastRun.createdAt)
+      if (Number.isFinite(lastRunMs) && Date.now() - lastRunMs < autoResumeBackoffMs(config)) {
+        return {
+          launch: false,
+          reason: 'Planning mode backoff is active; sentinel is intentionally slowing retries.',
+        }
       }
     }
   }
@@ -3505,7 +3991,7 @@ function launchMainLoopOnce(
     dryRun: false,
     model,
   }
-  saveMainRunLock(projectName, lock)
+  acquireMainRunLock(projectName, lock, config)
   return lock
 }
 
@@ -3596,7 +4082,7 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
     dryRun,
     model: getStringFlag(parsedArgs, 'model') ?? config.codex?.model,
   }
-  saveMainRunLock(projectName, runLock)
+  runLock = acquireMainRunLock(projectName, runLock, config)
   const heartbeatTimer = setInterval(() => {
     runLock = {
       ...runLock,
@@ -3610,6 +4096,7 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
 
   try {
     for (let iteration = 0; iteration < iterations; iteration += 1) {
+      const currentPhase = loadPhaseState(projectName).current
       const persistRunRecord = (runRecord: RunRecord): void => {
         state.totalRuns += 1
         state.lastRun = runRecord
@@ -3626,6 +4113,7 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
       }
 
       const currentEvaluation = runEvaluation(root, config).parsed
+      ensurePhaseBaseline(projectName, state, currentPhase, currentEvaluation.score)
       const sequence = state.totalRuns + 1
       const runId = `${new Date().toISOString().replaceAll(':', '').replaceAll('.', '').replaceAll('-', '')}-${String(sequence).padStart(4, '0')}`
       const runDir = join(runsRoot, runId)
@@ -3676,11 +4164,15 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
           persistRunRecord({
             runId,
             status: 'failed',
+            phase: currentPhase,
             dryRun,
             score: currentEvaluation.score,
             scoreDelta: 0,
             baselineScore,
+            phaseBaselineScore: phaseBestScore(state, currentPhase) ?? currentEvaluation.score,
             bestScoreAfterRun: state.bestScore ?? currentEvaluation.score,
+            acceptedAgainstPhaseBaseline: false,
+            rejectionReasonCode: 'failed-timeout',
             changedFiles,
             invalidChanges,
             codexExitCode,
@@ -3702,11 +4194,15 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
           persistRunRecord({
             runId,
             status: 'failed',
+            phase: currentPhase,
             dryRun,
             score: currentEvaluation.score,
             scoreDelta: 0,
             baselineScore,
+            phaseBaselineScore: phaseBestScore(state, currentPhase) ?? currentEvaluation.score,
             bestScoreAfterRun: state.bestScore ?? currentEvaluation.score,
+            acceptedAgainstPhaseBaseline: false,
+            rejectionReasonCode: 'failed-exit',
             changedFiles,
             invalidChanges,
             codexExitCode,
@@ -3739,14 +4235,15 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
       writeJsonFile(join(runDir, 'evaluation.json'), evaluation)
 
       const baselineScore = state.bestScore ?? currentEvaluation.score
+      const phaseBaseline = phaseBestScore(state, currentPhase) ?? currentEvaluation.score
       const minimumImprovement = config.minimum_improvement ?? 0
-      const scoreDelta = Number((evaluation.score - baselineScore).toFixed(3))
+      const scoreDelta = Number((evaluation.score - phaseBaseline).toFixed(3))
       const improvedEnough =
-        state.bestScore === null ||
-        evaluation.score >= state.bestScore + minimumImprovement
+        phaseBestScore(state, currentPhase) === null ||
+        evaluation.score >= phaseBaseline + minimumImprovement
       const accepted = invalidChanges.length === 0 && improvedEnough
       const status: RunRecord['status'] =
-        state.bestScore === null && changedFiles.length === 0 && dryRun
+        phaseBestScore(state, currentPhase) === null && changedFiles.length === 0 && dryRun
           ? 'baseline'
           : accepted
             ? 'accepted'
@@ -3754,8 +4251,14 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
 
       if (accepted) {
         syncAllowedRoots(candidateRoot, root, config.allowed_edit_roots)
-        state.bestScore = evaluation.score
-        state.bestRunId = runId
+        if (state.bestScore === null || evaluation.score > state.bestScore) {
+          state.bestScore = evaluation.score
+          state.bestRunId = runId
+        }
+        state.bestScoreByPhase ??= {}
+        state.bestRunIdByPhase ??= {}
+        state.bestScoreByPhase[currentPhase] = evaluation.score
+        state.bestRunIdByPhase[currentPhase] = runId
         state.acceptedRuns.push(runId)
       } else {
         state.rejectedRuns.push(runId)
@@ -3764,11 +4267,20 @@ async function commandRun(parsedArgs: ParsedArgs): Promise<void> {
       const runRecord: RunRecord = {
         runId,
         status,
+        phase: currentPhase,
         dryRun,
         score: evaluation.score,
         scoreDelta,
         baselineScore,
+        phaseBaselineScore: phaseBaseline,
         bestScoreAfterRun: state.bestScore ?? evaluation.score,
+        acceptedAgainstPhaseBaseline: accepted,
+        rejectionReasonCode:
+          invalidChanges.length > 0
+            ? 'invalid-change-surface'
+            : improvedEnough
+              ? undefined
+              : 'phase-baseline-not-met',
         changedFiles,
         invalidChanges,
         codexExitCode,
@@ -3802,74 +4314,118 @@ async function runSentinelPass(
   }
 
   let config = loadProjectConfig(projectName)
-  const state = loadProjectState(projectName)
-  if (getBooleanFlag(parsedArgs, 'fix')) {
-    bootstrapSentinelOwnedFiles(projectName, config)
-  }
-
-  let evaluation = runEvaluation(projectDir(projectName), config).parsed
-  const phaseReconcile = reconcileSentinelPhase(
-    projectName,
-    config,
-    state,
+  const passLock = acquireSentinelLock(
+    projectSentinelPassLockPath(projectName),
+    {
+      project: projectName,
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      heartbeatAt: new Date().toISOString(),
+      mode: 'pass',
+    },
+    Math.max(
+      sentinelIntervalMs(config, parsedArgs),
+      (config.sentinel?.codex_timeout_minutes ?? 15) * 60_000,
+    ),
   )
-  config = phaseReconcile.config
-  maybeRefreshProtectedManifest(projectName, config, parsedArgs)
-
-  evaluation = runEvaluation(projectDir(projectName), config).parsed
-  let report = buildHealthReport(projectName, config, state, evaluation)
-  writeSentinelArtifacts(projectName, config, state, report)
-
-  const shouldRunCodex =
-    getBooleanFlag(parsedArgs, 'codex') || getBooleanFlag(parsedArgs, 'loop')
-  const sentinelRecord = shouldRunCodex
-    ? await runSentinelCodexMaintenance(projectName, config, report, parsedArgs)
-    : null
-
-  if (sentinelRecord && sentinelRecord.promotedPaths.length > 0) {
-    evaluation = runEvaluation(projectDir(projectName), config).parsed
-    report = buildHealthReport(projectName, config, state, evaluation)
-    writeSentinelArtifacts(projectName, config, state, report)
-  }
-
-  const activeMainRun = loadActiveMainRunLock(projectName, config)
-  if (!activeMainRun) {
-    const autoResumeDecision = shouldSentinelLaunchMainLoop(config, report)
-    if (autoResumeDecision.launch) {
-      const launched = launchMainLoopOnce(projectName, config)
-      evaluation = runEvaluation(projectDir(projectName), config).parsed
-      report = buildHealthReport(projectName, config, state, evaluation)
-      writeSentinelArtifacts(projectName, config, state, report)
-      console.log(
-        `Sentinel launched main research loop pid=${launched.pid} iterations=${launched.iterations} model=${launched.model ?? 'default'}`,
-      )
-    } else {
-      console.log(`Sentinel did not launch main loop: ${autoResumeDecision.reason}`)
+  try {
+    const state = loadProjectState(projectName)
+    if (getBooleanFlag(parsedArgs, 'fix')) {
+      bootstrapSentinelOwnedFiles(projectName, config)
     }
-  } else {
-    console.log(
-      `Sentinel observed active main research loop pid=${activeMainRun.pid} launchedBy=${activeMainRun.launchedBy}`,
+
+    let evaluation = runEvaluation(projectDir(projectName), config).parsed
+    const phaseReconcile = reconcileSentinelPhase(
+      projectName,
+      config,
+      state,
     )
-  }
+    config = phaseReconcile.config
+    maybeRefreshProtectedManifest(projectName, config, parsedArgs)
 
-  console.log(
-    `Sentinel updated ${projectHealthPath(projectName)} and ${projectDashboardPath(projectName)}`,
-  )
-  console.log(
-    `Issues: ${
-      report.issues.length > 0
-        ? report.issues.map(issue => `${issue.severity}:${issue.id}`).join(', ')
-        : 'none'
-    }`,
-  )
+    evaluation = runEvaluation(projectDir(projectName), config).parsed
+    ensurePhaseBaseline(projectName, state, loadPhaseState(projectName).current, evaluation.score)
+    let report = buildHealthReport(projectName, config, state, evaluation)
+    const planning = buildPlanningState(projectName, report.phase, report)
+    writePlanningArtifacts(projectName, planning)
+    report = buildHealthReport(projectName, config, state, evaluation, planning)
+    writeSentinelArtifacts(projectName, config, state, report)
 
-  if (sentinelRecord) {
-    console.log(
-      `Sentinel Codex maintenance run ${sentinelRecord.runId} exit=${sentinelRecord.codexExitCode}${sentinelRecord.timedOut ? ' timed_out=true' : ''} promoted=${sentinelRecord.promotedPaths.length} invalid=${sentinelRecord.invalidChanges.length}`,
+    const shouldRunCodex =
+      getBooleanFlag(parsedArgs, 'codex') || getBooleanFlag(parsedArgs, 'loop')
+    const sentinelRecord = shouldRunCodex
+      ? await runSentinelCodexMaintenance(projectName, config, report, parsedArgs)
+      : null
+
+    if (sentinelRecord && sentinelRecord.promotedPaths.length > 0) {
+      evaluation = runEvaluation(projectDir(projectName), config).parsed
+      const refreshedPlanning = buildPlanningState(
+        projectName,
+        loadPhaseState(projectName),
+        buildHealthReport(projectName, config, state, evaluation),
+      )
+      writePlanningArtifacts(projectName, refreshedPlanning)
+      report = buildHealthReport(projectName, config, state, evaluation, refreshedPlanning)
+      writeSentinelArtifacts(projectName, config, state, report)
+    }
+
+    const activeMainRun = loadActiveMainRunLock(projectName, config)
+    if (!activeMainRun) {
+      const autoResumeDecision = shouldSentinelLaunchMainLoop(config, state, report)
+      if (autoResumeDecision.launch) {
+        const launched = launchMainLoopOnce(projectName, config)
+        evaluation = runEvaluation(projectDir(projectName), config).parsed
+        const refreshedPlanning = buildPlanningState(
+          projectName,
+          loadPhaseState(projectName),
+          buildHealthReport(projectName, config, state, evaluation),
+        )
+        writePlanningArtifacts(projectName, refreshedPlanning)
+        report = buildHealthReport(projectName, config, state, evaluation, refreshedPlanning)
+        writeSentinelArtifacts(projectName, config, state, report)
+        console.log(
+          `Sentinel launched main research loop pid=${launched.pid} iterations=${launched.iterations} model=${launched.model ?? 'default'}`,
+        )
+      } else {
+        console.log(`Sentinel did not launch main loop: ${autoResumeDecision.reason}`)
+      }
+    } else {
+      console.log(
+        `Sentinel observed active main research loop pid=${activeMainRun.pid} launchedBy=${activeMainRun.launchedBy}`,
+      )
+    }
+
+    evaluation = runEvaluation(projectDir(projectName), config).parsed
+    const stablePlanning = buildPlanningState(
+      projectName,
+      loadPhaseState(projectName),
+      buildHealthReport(projectName, config, state, evaluation),
     )
-  }
+    writePlanningArtifacts(projectName, stablePlanning)
+    report = buildHealthReport(projectName, config, state, evaluation, stablePlanning)
+    writeSentinelArtifacts(projectName, config, state, report)
 
-  return sentinelRecord
+    console.log(
+      `Sentinel updated ${projectHealthPath(projectName)} and ${projectDashboardPath(projectName)}`,
+    )
+    console.log(
+      `Issues: ${
+        report.issues.length > 0
+          ? report.issues.map(issue => `${issue.severity}:${issue.id}`).join(', ')
+          : 'none'
+      }`,
+    )
+
+    if (sentinelRecord) {
+      console.log(
+        `Sentinel Codex maintenance run ${sentinelRecord.runId} exit=${sentinelRecord.codexExitCode}${sentinelRecord.timedOut ? ' timed_out=true' : ''} promoted=${sentinelRecord.promotedPaths.length} invalid=${sentinelRecord.invalidChanges.length}`,
+      )
+    }
+
+    return sentinelRecord
+  } finally {
+    releaseJsonLock(projectSentinelPassLockPath(projectName), passLock.pid)
+  }
 }
 
 async function commandSentinel(parsedArgs: ParsedArgs): Promise<void> {
@@ -3886,14 +4442,40 @@ async function commandSentinel(parsedArgs: ParsedArgs): Promise<void> {
     return
   }
 
+  const loopLock = acquireSentinelLock(
+    projectSentinelLoopLockPath(projectName),
+    {
+      project: projectName,
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      heartbeatAt: new Date().toISOString(),
+      mode: 'loop',
+    },
+    Math.max(
+      sentinelIntervalMs(config, parsedArgs) * 2,
+      (config.sentinel?.codex_timeout_minutes ?? 15) * 60_000,
+    ),
+  )
+  const heartbeatTimer = setInterval(() => {
+    refreshJsonLock(projectSentinelLoopLockPath(projectName), {
+      ...loopLock,
+      heartbeatAt: new Date().toISOString(),
+    })
+  }, 30_000)
+
   const intervalMs = sentinelIntervalMs(config, parsedArgs)
   console.log(
     `Starting sentinel loop for ${projectName} with interval ${Math.round(intervalMs / 60000)} minutes`,
   )
 
-  for (;;) {
-    await runSentinelPass(parsedArgs)
-    await sleepMs(intervalMs)
+  try {
+    for (;;) {
+      await runSentinelPass(parsedArgs)
+      await sleepMs(intervalMs)
+    }
+  } finally {
+    clearInterval(heartbeatTimer)
+    releaseJsonLock(projectSentinelLoopLockPath(projectName), loopLock.pid)
   }
 }
 
