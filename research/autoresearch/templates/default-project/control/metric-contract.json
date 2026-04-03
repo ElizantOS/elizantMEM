@@ -1,0 +1,78 @@
+{
+  "owner": "sentinel",
+  "summary": "Sentinel-owned metric contract for literature-grounded research progress.",
+  "metrics": [
+    {
+      "id": "literature_review",
+      "label": "Literature grounding review",
+      "kind": "coverage",
+      "file": "workspace/literature/review.md",
+      "terms": ["paper", "benchmark", "metric", "retrieval", "write policy", "memory", "gap"],
+      "weight": 2
+    },
+    {
+      "id": "benchmark_map",
+      "label": "Benchmark and metric map",
+      "kind": "table_rows",
+      "file": "workspace/literature/benchmark-map.md",
+      "target": 4,
+      "weight": 1.5
+    },
+    {
+      "id": "paper_outline",
+      "label": "Paper outline coverage",
+      "kind": "coverage",
+      "file": "workspace/paper/outline.md",
+      "terms": ["problem", "method", "experiments", "results", "limitations"],
+      "weight": 2
+    },
+    {
+      "id": "paper_abstract",
+      "label": "Abstract draft exists",
+      "kind": "exists_min_length",
+      "file": "workspace/paper/abstract.md",
+      "target": 180,
+      "weight": 1
+    },
+    {
+      "id": "design_specificity",
+      "label": "System design specificity",
+      "kind": "coverage",
+      "file": "workspace/design/system.md",
+      "terms": ["architecture", "interfaces", "data flow", "failure modes", "guardrails"],
+      "weight": 2.5
+    },
+    {
+      "id": "experiment_plan",
+      "label": "Experiment plan coverage",
+      "kind": "coverage",
+      "file": "workspace/experiments/plan.md",
+      "terms": ["hypothesis", "baseline", "metrics", "ablations", "risks"],
+      "weight": 3
+    },
+    {
+      "id": "evaluation_matrix_rows",
+      "label": "Evaluation matrix breadth",
+      "kind": "table_rows",
+      "file": "workspace/experiments/eval-matrix.md",
+      "target": 4,
+      "weight": 1.5
+    },
+    {
+      "id": "results_readout",
+      "label": "Results readout scaffold",
+      "kind": "coverage",
+      "file": "workspace/results/readout.md",
+      "terms": ["baseline", "variant", "delta", "failure modes", "next hypothesis"],
+      "weight": 1.5
+    },
+    {
+      "id": "iteration_notes",
+      "label": "Iteration notes",
+      "kind": "exists_min_length",
+      "file": "workspace/ITERATION_NOTES.md",
+      "target": 80,
+      "weight": 1
+    }
+  ]
+}

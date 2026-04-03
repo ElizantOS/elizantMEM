@@ -1,0 +1,35 @@
+{
+  "name": "__PROJECT_NAME__",
+  "description": "Generic Codex-driven autonomous research project",
+  "goal_file": "goal.md",
+  "program_file": "program.md",
+  "derived_goal_file": "control/derived-objective.md",
+  "metric_contract_file": "control/metric-contract.json",
+  "workspace_dir": "workspace",
+  "allowed_edit_roots": ["workspace"],
+  "ignored_diff_roots": [".omx"],
+  "protected_paths": ["goal.md", "program.md", "project.json"],
+  "evaluation_command": ["bun", "run", "evaluation/evaluate.ts"],
+  "minimum_improvement": 0.1,
+  "codex": {
+    "model": "gpt-5.4-medium",
+    "timeout_minutes": 30,
+    "sandbox": "workspace-write",
+    "search": false
+  },
+  "sentinel": {
+    "codex_model": "gpt-5.4-medium",
+    "codex_timeout_minutes": 15,
+    "interval_hours": 6,
+    "stagnation_threshold": 3,
+    "event_trigger_on_run_complete": true,
+    "allowed_edit_roots": [
+      "scripts/autoresearch.ts",
+      "research/autoresearch/README.md",
+      "research/autoresearch/templates",
+      "research/autoresearch/projects/__PROJECT_NAME__/project.json",
+      "research/autoresearch/projects/__PROJECT_NAME__/control",
+      "research/autoresearch/projects/__PROJECT_NAME__/evaluation"
+    ]
+  }
+}
