@@ -1,4 +1,10 @@
 .autoresearch/
+!.autoresearch/
+!.autoresearch/projects/
+!.autoresearch/projects/memory-policy/
+!.autoresearch/projects/memory-policy/**
 .omx/
 node_modules/
+dist/
+cli
 *.log

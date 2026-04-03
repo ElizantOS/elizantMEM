@@ -1,0 +1,53 @@
+{
+  "project": "memory-policy",
+  "bestScore": 13.25,
+  "bestRunId": "20260403T023410609Z-0008",
+  "totalRuns": 9,
+  "acceptedRuns": [
+    "20260402T164922125Z-0001",
+    "20260403T021828615Z-0006",
+    "20260403T023410609Z-0008"
+  ],
+  "rejectedRuns": [
+    "20260402T165137859Z-0002",
+    "20260403T013427289Z-0003",
+    "20260403T015519437Z-0004",
+    "20260403T015822028Z-0005",
+    "20260403T022919561Z-0007",
+    "20260403T025334228Z-0009"
+  ],
+  "createdAt": "2026-04-02T16:49:22.110Z",
+  "updatedAt": "2026-04-03T02:55:10.398Z",
+  "lastRun": {
+    "runId": "20260403T025334228Z-0009",
+    "status": "rejected",
+    "dryRun": false,
+    "score": 11,
+    "scoreDelta": -2.25,
+    "baselineScore": 13.25,
+    "bestScoreAfterRun": 13.25,
+    "changedFiles": [
+      "implementation/README.md",
+      "implementation/replay/replay-harness.ts",
+      "workspace/ITERATION_NOTES.md"
+    ],
+    "invalidChanges": [],
+    "codexExitCode": 0,
+    "evaluation": {
+      "score": 11,
+      "summary": "The workspace is coherent enough to hand off for implementation-oriented experimentation.",
+      "metrics": {
+        "trace_schema": 1,
+        "ledger_schema": 1,
+        "replay_harness": 1,
+        "baseline_registry": 1,
+        "metric_engine": 1,
+        "implementation_readme": 1,
+        "iteration_notes": 1
+      },
+      "recommendation": "Push deeper on implementation specificity or statistical evaluation details."
+    },
+    "createdAt": "2026-04-03T02:55:10.397Z"
+  },
+  "failedRuns": []
+}

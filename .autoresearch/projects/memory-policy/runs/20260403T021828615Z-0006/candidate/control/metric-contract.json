@@ -1,0 +1,93 @@
+{
+  "owner": "sentinel",
+  "summary": "Sentinel-derived metric contract for the memory-policy research loop.",
+  "metrics": [
+    {
+      "id": "abstract_quality",
+      "label": "Abstract quality",
+      "kind": "length",
+      "file": "workspace/paper/abstract.md",
+      "target": 900,
+      "weight": 1.5
+    },
+    {
+      "id": "outline_structure",
+      "label": "Outline structure",
+      "kind": "headings",
+      "file": "workspace/paper/outline.md",
+      "target": 7,
+      "weight": 1.5
+    },
+    {
+      "id": "architecture_coverage",
+      "label": "Architecture coverage",
+      "kind": "coverage",
+      "file": "workspace/design/memory-loop.md",
+      "terms": [
+        "event capture",
+        "candidate generator",
+        "memory scorer",
+        "write policy",
+        "memory store",
+        "retrieval policy",
+        "feedback ledger",
+        "reward"
+      ],
+      "weight": 3.0
+    },
+    {
+      "id": "experiment_rigor",
+      "label": "Experiment rigor",
+      "kind": "coverage",
+      "file": "workspace/experiments/plan.md",
+      "terms": [
+        "hypothesis",
+        "baseline",
+        "offline",
+        "online",
+        "ablation",
+        "rollout",
+        "risks"
+      ],
+      "weight": 2.5
+    },
+    {
+      "id": "evaluation_specificity",
+      "label": "Evaluation specificity",
+      "kind": "coverage",
+      "file": "workspace/experiments/eval-matrix.md",
+      "terms": [
+        "write precision",
+        "pollution rate",
+        "stale rate",
+        "task success lift",
+        "sql success lift",
+        "token reduction",
+        "latency reduction"
+      ],
+      "weight": 1.0
+    },
+    {
+      "id": "results_readout",
+      "label": "Results readout scaffold",
+      "kind": "coverage",
+      "file": "workspace/results/readout.md",
+      "terms": [
+        "baseline",
+        "variant",
+        "delta",
+        "failure modes",
+        "next hypothesis"
+      ],
+      "weight": 0.75
+    },
+    {
+      "id": "iteration_notes",
+      "label": "Iteration notes",
+      "kind": "exists_min_length",
+      "file": "workspace/ITERATION_NOTES.md",
+      "target": 120,
+      "weight": 0.5
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  {
+    "title": "Refresh sentinel artifacts",
+    "command": "bun run autoresearch sentinel memory-policy"
+  }
+]

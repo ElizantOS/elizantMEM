@@ -1,0 +1,26 @@
+{
+  "name": "memory-policy",
+  "description": "Long-memory paper and experiment lane for Memory as Policy",
+  "goal_file": "goal.md",
+  "program_file": "program.md",
+  "workspace_dir": "workspace",
+  "allowed_edit_roots": ["workspace"],
+  "protected_paths": [
+    "goal.md",
+    "program.md",
+    "project.json",
+    "evaluation/evaluate.ts"
+  ],
+  "evaluation_command": ["bun", "run", "evaluation/evaluate.ts"],
+  "minimum_improvement": 0.2,
+  "codex": {
+    "model": "gpt-5.4-medium",
+    "sandbox": "workspace-write",
+    "search": true
+  },
+  "sentinel": {
+    "codex_model": "gpt-5.4-medium",
+    "interval_hours": 6,
+    "stagnation_threshold": 3
+  }
+}

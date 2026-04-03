@@ -1,0 +1,85 @@
+import { existsSync, readFileSync } from 'fs'
+import { join } from 'path'
+
+type MetricSpec = {
+  id: string
+  label?: string
+  kind: 'length' | 'headings' | 'coverage' | 'exists_min_length'
+  file: string
+  target?: number
+  weight: number
+  terms?: string[]
+}
+
+type MetricContract = {
+  owner?: string
+  summary?: string
+  metrics: MetricSpec[]
+}
+
+const root = process.cwd()
+
+function read(relativePath: string): string {
+  const fullPath = join(root, relativePath)
+  return existsSync(fullPath) ? readFileSync(fullPath, 'utf8') : ''
+}
+
+function coverage(text: string, terms: string[]): number {
+  if (terms.length === 0) return 0
+  const matched = terms.filter(term =>
+    text.toLowerCase().includes(term.toLowerCase()),
+  ).length
+  return matched / terms.length
+}
+
+function headingCount(text: string): number {
+  return text
+    .split('\n')
+    .filter(line => line.trim().startsWith('#')).length
+}
+
+const contract = JSON.parse(
+  read('control/metric-contract.json'),
+) as MetricContract
+
+const metrics: Record<string, number> = {}
+let weightedScore = 0
+
+for (const metric of contract.metrics) {
+  const text = read(metric.file)
+  let value = 0
+
+  switch (metric.kind) {
+    case 'length':
+      value = Math.min(text.trim().length / Math.max(metric.target ?? 1, 1), 1)
+      break
+    case 'headings':
+      value = Math.min(headingCount(text) / Math.max(metric.target ?? 1, 1), 1)
+      break
+    case 'coverage':
+      value = coverage(text, metric.terms ?? [])
+      break
+    case 'exists_min_length':
+      value = text.trim().length >= (metric.target ?? 1) ? 1 : 0
+      break
+  }
+
+  metrics[metric.id] = value
+  weightedScore += value * metric.weight
+}
+
+const score = Number(weightedScore.toFixed(3))
+
+const summary =
+  score >= 8
+    ? 'The workspace is coherent enough to hand off for implementation-oriented experimentation.'
+    : 'The workspace still needs sharper architecture, experiment rigor, or iteration bookkeeping.'
+
+const recommendation =
+  metrics.iteration_notes === 0
+    ? 'Add workspace/ITERATION_NOTES.md so each run records a concrete hypothesis.'
+    : metrics.experiment_rigor !== undefined && metrics.experiment_rigor < 0.9
+      ? 'Tighten baselines, offline/online protocol, and ablation design.'
+      : 'Push deeper on implementation specificity or statistical evaluation details.'
+
+console.log(JSON.stringify({ score, summary, metrics, recommendation }, null, 2))

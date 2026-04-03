@@ -1,0 +1,68 @@
+{
+  "owner": "sentinel",
+  "summary": "Sentinel-owned metric contract for bootstrapping executable experiment code.",
+  "metrics": [
+    {
+      "id": "trace_schema",
+      "label": "Trace schema contract",
+      "kind": "exists_min_length",
+      "file": "implementation/contracts/trace-schema.ts",
+      "target": 240,
+      "weight": 2
+    },
+    {
+      "id": "ledger_schema",
+      "label": "Ledger schema contract",
+      "kind": "exists_min_length",
+      "file": "implementation/contracts/ledger-schema.ts",
+      "target": 240,
+      "weight": 2
+    },
+    {
+      "id": "replay_harness",
+      "label": "Replay harness scaffold",
+      "kind": "exists_min_length",
+      "file": "implementation/replay/replay-harness.ts",
+      "target": 240,
+      "weight": 2
+    },
+    {
+      "id": "baseline_registry",
+      "label": "Baseline registry scaffold",
+      "kind": "exists_min_length",
+      "file": "implementation/baselines/registry.ts",
+      "target": 180,
+      "weight": 1.5
+    },
+    {
+      "id": "metric_engine",
+      "label": "Metric computation scaffold",
+      "kind": "exists_min_length",
+      "file": "implementation/evaluation/metrics.ts",
+      "target": 180,
+      "weight": 1.5
+    },
+    {
+      "id": "implementation_readme",
+      "label": "Implementation roadmap",
+      "kind": "coverage",
+      "file": "implementation/README.md",
+      "terms": [
+        "trace",
+        "ledger",
+        "replay",
+        "baseline",
+        "evaluation"
+      ],
+      "weight": 1.5
+    },
+    {
+      "id": "iteration_notes",
+      "label": "Iteration notes",
+      "kind": "exists_min_length",
+      "file": "workspace/ITERATION_NOTES.md",
+      "target": 120,
+      "weight": 0.5
+    }
+  ]
+}
